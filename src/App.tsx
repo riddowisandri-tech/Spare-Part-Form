@@ -18,7 +18,6 @@ import { db } from './firebase';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { 
   Scan, 
-  LogOut, 
   Package, 
   History, 
   Plus, 
@@ -90,7 +89,6 @@ const Logo = () => (
 );
 
 export default function App() {
-  const [technicianName, setTechnicianName] = useState<string | null>(localStorage.getItem('tech_name'));
   const [view, setView] = useState<'home' | 'scan' | 'form' | 'history'>('home');
   const [scannedBarcode, setScannedBarcode] = useState<string | null>(null);
   const [currentPart, setCurrentPart] = useState<SparePart | null>(null);
@@ -101,7 +99,6 @@ export default function App() {
   const [stats, setStats] = useState({ totalParts: 0, todayTxs: 0 });
   const [showSettings, setShowSettings] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
-  const [loginInput, setLoginInput] = useState('');
   const [confirmAction, setConfirmAction] = useState<{ type: 'history' | 'parts', title: string, message: string } | null>(null);
 
   const usbInputRef = useRef<HTMLInputElement>(null);
@@ -133,21 +130,6 @@ export default function App() {
 
     return () => unsubscribe();
   }, []);
-
-  const handleLogin = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const name = new FormData(e.currentTarget).get('name') as string;
-    if (name) {
-      setTechnicianName(name);
-      localStorage.setItem('tech_name', name);
-    }
-  };
-
-  const handleLogout = () => {
-    setTechnicianName(null);
-    localStorage.removeItem('tech_name');
-    setShowSettings(false);
-  };
 
   const executeClearHistory = async () => {
     setIsClearing(true);
@@ -209,14 +191,21 @@ export default function App() {
 
   const handleTransaction = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!technicianName || !scannedBarcode) return;
+    if (!scannedBarcode) return;
 
     setIsSubmitting(true);
     const formData = new FormData(e.currentTarget);
-    const action = formData.get('action') as 'take' | 'return';
+    const technicianName = formData.get('technicianName') as string;
+    const action = 'take';
     const quantity = parseInt(formData.get('quantity') as string) || 1;
     const notes = formData.get('notes') as string;
     const partName = formData.get('name') as string || currentPart?.name;
+
+    if (!technicianName) {
+      setMessage({ type: 'error', text: "Please enter your name." });
+      setIsSubmitting(false);
+      return;
+    }
 
     try {
       const partRef = doc(db, 'spareparts', scannedBarcode);
@@ -225,14 +214,12 @@ export default function App() {
           barcode: scannedBarcode,
           name: partName,
           description: '',
-          stock: action === 'return' ? quantity : 0
+          stock: 0
         });
         setStats(prev => ({ ...prev, totalParts: prev.totalParts + 1 }));
       } else {
         // Update existing stock
-        const newStock = action === 'return' 
-          ? (currentPart.stock || 0) + quantity 
-          : Math.max(0, (currentPart.stock || 0) - quantity);
+        const newStock = Math.max(0, (currentPart.stock || 0) - quantity);
         
         await updateDoc(partRef, { stock: newStock });
       }
@@ -247,7 +234,7 @@ export default function App() {
         timestamp: serverTimestamp()
       });
 
-      setMessage({ type: 'success', text: `Successfully recorded ${action === 'take' ? 'taking' : 'returning'} ${quantity}x ${partName || scannedBarcode}` });
+      setMessage({ type: 'success', text: `Successfully recorded taking ${quantity}x ${partName || scannedBarcode}` });
       setView('home');
       setScannedBarcode(null);
       setCurrentPart(null);
@@ -259,58 +246,6 @@ export default function App() {
       setTimeout(() => setMessage(null), 5000);
     }
   };
-
-  if (!technicianName) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-brand-bg p-6 overflow-hidden">
-        <div className="absolute inset-0 opacity-10 pointer-events-none">
-          <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-brand-accent rounded-full blur-[120px]"></div>
-          <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-500 rounded-full blur-[120px]"></div>
-        </div>
-        
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="w-full max-w-md glass-panel p-10 text-center relative z-10"
-        >
-          <div className="flex justify-center mb-8">
-            <Logo />
-          </div>
-          
-          <h1 className="text-3xl font-black text-white mb-2 uppercase tracking-tighter italic">Technician Access</h1>
-          <p className="text-stone-500 mb-10 font-medium">Enter your name to start tracking inventory</p>
-          
-          <form onSubmit={handleLogin} className="space-y-6">
-            <div className="space-y-2 text-left">
-              <label className="text-[10px] font-black uppercase tracking-widest text-stone-500 ml-2">Full Name</label>
-              <div className="relative">
-                {loginInput === '' && (
-                  <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-stone-600" />
-                )}
-                <input 
-                  name="name"
-                  required
-                  value={loginInput}
-                  onChange={(e) => setLoginInput(e.target.value)}
-                  placeholder={loginInput === '' ? "    Enter Your Name/ID" : "Enter Your Name/ID"}
-                  className={cn(
-                    "w-full input-field py-4 text-lg transition-all",
-                    loginInput === '' ? "pl-12" : "pl-6"
-                  )}
-                />
-              </div>
-            </div>
-            <button 
-              type="submit"
-              className="w-full btn-primary py-4 text-lg uppercase tracking-widest italic"
-            >
-              Sign In
-            </button>
-          </form>
-        </motion.div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-brand-bg text-stone-300 font-sans flex">
@@ -361,13 +296,6 @@ export default function App() {
             <Settings className="w-5 h-5" />
             Settings
           </button>
-          <button 
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-500/70 hover:text-red-500 hover:bg-red-500/5 transition-all font-medium"
-          >
-            <LogOut className="w-5 h-5" />
-            Log Out
-          </button>
         </div>
       </aside>
 
@@ -386,10 +314,6 @@ export default function App() {
           </div>
           
           <div className="flex items-center gap-4">
-            <div className="text-right hidden sm:block">
-              <p className="text-sm font-bold text-white leading-none mb-1">{technicianName}</p>
-              <p className="text-[10px] text-stone-500 uppercase tracking-widest font-bold">Technician</p>
-            </div>
             <div className="w-10 h-10 bg-brand-accent/20 rounded-xl flex items-center justify-center border border-brand-accent/20">
               <UserIcon className="w-5 h-5 text-brand-accent" />
             </div>
@@ -424,19 +348,6 @@ export default function App() {
                 </div>
 
                 <div className="space-y-4">
-                  <button 
-                    onClick={handleLogout}
-                    className="w-full p-5 bg-white/5 rounded-2xl flex items-center gap-4 hover:bg-white/10 transition-all border border-white/5"
-                  >
-                    <div className="w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center">
-                      <LogOut className="w-5 h-5 text-blue-500" />
-                    </div>
-                    <div className="text-left">
-                      <p className="font-bold text-white">Logout</p>
-                      <p className="text-xs text-stone-500">Exit session for {technicianName}</p>
-                    </div>
-                  </button>
-
                   <button 
                     onClick={() => setConfirmAction({ 
                       type: 'history', 
@@ -606,7 +517,6 @@ export default function App() {
                       <tr className="bg-white/2">
                         <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-stone-500">Barcode</th>
                         <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-stone-500">Technician</th>
-                        <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-stone-500">Action</th>
                         <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-stone-500">Qty</th>
                         <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-stone-500">Time</th>
                       </tr>
@@ -623,14 +533,6 @@ export default function App() {
                           <tr key={tx.id} className="hover:bg-white/[0.02] transition-colors group">
                             <td className="px-6 py-4 font-mono text-sm text-white font-bold">{tx.partBarcode}</td>
                             <td className="px-6 py-4 text-sm font-medium">{tx.technicianName}</td>
-                            <td className="px-6 py-4">
-                              <span className={cn(
-                                "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider",
-                                tx.action === 'take' ? "bg-orange-500/10 text-orange-500" : "bg-brand-accent/10 text-brand-accent"
-                              )}>
-                                {tx.action}
-                              </span>
-                            </td>
                             <td className="px-6 py-4 text-sm font-bold text-white">{tx.quantity || 1}</td>
                             <td className="px-6 py-4 text-xs text-stone-500">
                               {tx.timestamp?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -735,21 +637,13 @@ export default function App() {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-stone-500">Action Type</label>
-                    <div className="grid grid-cols-2 gap-4">
-                      <label className="relative cursor-pointer group">
-                        <input type="radio" name="action" value="take" defaultChecked className="peer sr-only" />
-                        <div className="bg-white/5 border border-transparent rounded-xl p-6 text-center peer-checked:bg-orange-500 peer-checked:text-white transition-all group-active:scale-95 shadow-lg peer-checked:shadow-orange-500/20">
-                          <p className="font-black uppercase italic text-lg">Take</p>
-                        </div>
-                      </label>
-                      <label className="relative cursor-pointer group">
-                        <input type="radio" name="action" value="return" className="peer sr-only" />
-                        <div className="bg-white/5 border border-transparent rounded-xl p-6 text-center peer-checked:bg-brand-accent peer-checked:text-brand-bg transition-all group-active:scale-95 shadow-lg peer-checked:shadow-brand-accent/20">
-                          <p className="font-black uppercase italic text-lg">Return</p>
-                        </div>
-                      </label>
-                    </div>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-stone-500">Technician Name</label>
+                    <input 
+                      name="technicianName"
+                      required
+                      placeholder="Enter your name..."
+                      className="w-full input-field"
+                    />
                   </div>
 
                   <div className="space-y-2">
@@ -810,7 +704,6 @@ export default function App() {
                       <tr className="bg-white/2">
                         <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-stone-500">Barcode</th>
                         <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-stone-500">Technician</th>
-                        <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-stone-500">Action</th>
                         <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-stone-500">Qty</th>
                         <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-stone-500">Date & Time</th>
                       </tr>
@@ -820,14 +713,6 @@ export default function App() {
                         <tr key={tx.id} className="hover:bg-white/[0.02] transition-colors">
                           <td className="px-6 py-4 font-mono text-sm text-white font-bold">{tx.partBarcode}</td>
                           <td className="px-6 py-4 text-sm font-medium">{tx.technicianName}</td>
-                          <td className="px-6 py-4">
-                            <span className={cn(
-                              "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider",
-                              tx.action === 'take' ? "bg-orange-500/10 text-orange-500" : "bg-brand-accent/10 text-brand-accent"
-                            )}>
-                              {tx.action}
-                            </span>
-                          </td>
                           <td className="px-6 py-4 text-sm font-bold text-white">{tx.quantity || 1}</td>
                           <td className="px-6 py-4 text-xs text-stone-500">
                             {tx.timestamp?.toDate().toLocaleString()}
