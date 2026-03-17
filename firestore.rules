@@ -1,0 +1,63 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: spareparts
+    // Document ID: barcode
+    // Fields:
+    //   - barcode: string (required)
+    //   - name: string (required)
+    //   - description: string (optional)
+    //   - stock: number (optional)
+    //
+    // Collection: transactions
+    // Document ID: auto-generated
+    // Fields:
+    //   - partBarcode: string (required)
+    //   - technicianId: string (required)
+    //   - technicianName: string (optional)
+    //   - action: string (required, 'take' or 'return')
+    //   - notes: string (optional)
+    //   - timestamp: timestamp (required)
+    //
+    // ===============================================================
+
+    // Helper Functions
+    function isValidSparePart(data) {
+      return data.keys().hasAll(['barcode', 'name']) &&
+             data.barcode is string && data.barcode.size() > 0 &&
+             data.name is string && data.name.size() > 0;
+    }
+
+    function isValidTransaction(data) {
+      return data.keys().hasAll(['partBarcode', 'technicianName', 'action', 'timestamp']) &&
+             data.partBarcode is string &&
+             data.technicianName is string && data.technicianName.size() > 0 &&
+             data.action in ['take', 'return'] &&
+             data.timestamp is timestamp;
+    }
+
+    // Spareparts collection
+    match /spareparts/{partId} {
+      allow read: if true;
+      allow create, update: if isValidSparePart(request.resource.data);
+      allow delete: if true;
+    }
+
+    // Transactions collection
+    match /transactions/{transactionId} {
+      allow read: if true;
+      allow create: if isValidTransaction(request.resource.data);
+      allow update, delete: if true;
+    }
+
+    // Users collection (for profile info if needed)
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId);
+    }
+  }
+}

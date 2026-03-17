@@ -1,0 +1,40 @@
+{
+  "entities": {
+    "SparePart": {
+      "title": "Spare Part",
+      "description": "Information about a specific spare part.",
+      "type": "object",
+      "properties": {
+        "barcode": { "type": "string", "description": "The barcode of the spare part." },
+        "name": { "type": "string", "description": "Name of the spare part." },
+        "description": { "type": "string", "description": "General description of the part." },
+        "stock": { "type": "number", "description": "Current stock quantity." }
+      },
+      "required": ["barcode", "name"]
+    },
+    "Transaction": {
+      "title": "Spare Part Transaction",
+      "description": "Log of a technician taking or returning a spare part.",
+      "type": "object",
+      "properties": {
+        "partBarcode": { "type": "string", "description": "Barcode of the part." },
+        "technicianId": { "type": "string", "description": "UID of the technician." },
+        "technicianName": { "type": "string", "description": "Name of the technician." },
+        "action": { "type": "string", "enum": ["take", "return"], "description": "Action performed." },
+        "notes": { "type": "string", "description": "Technician's notes/description." },
+        "timestamp": { "type": "string", "format": "date-time", "description": "When the action occurred." }
+      },
+      "required": ["partBarcode", "technicianId", "action", "timestamp"]
+    }
+  },
+  "firestore": {
+    "spareparts": {
+      "schema": "SparePart",
+      "description": "Collection of all spare parts."
+    },
+    "transactions": {
+      "schema": "Transaction",
+      "description": "Log of all spare part movements."
+    }
+  }
+}

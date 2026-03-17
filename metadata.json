@@ -1,0 +1,7 @@
+{
+  "name": "SparePart Tracker",
+  "description": "A system for technicians to scan spare part barcodes and record usage or returns with detailed descriptions.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
