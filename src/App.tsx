@@ -16,6 +16,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { Html5QrcodeScanner } from 'html5-qrcode';
+import * as XLSX from 'xlsx';
 import { 
   Scan, 
   Package, 
@@ -49,6 +50,9 @@ interface SparePart {
   name: string;
   description: string;
   stock: number;
+  location?: string;
+  model?: string;
+  vendor?: string;
 }
 
 interface Transaction {
@@ -165,6 +169,72 @@ export default function App() {
     } finally {
       setIsClearing(false);
       setTimeout(() => setMessage(null), 3000);
+    }
+  };
+
+  const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsClearing(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = async (evt) => {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
+
+        // Skip header row (index 0 is title, index 1 is headers)
+        // Based on image: Row 1: INVENTORY LIST, Row 2: empty, Row 3: Headers, Row 4: Data
+        // Actually, looking at the image, Row 1 is "INVENTORY LIST", Row 2 is empty, Row 3 is Headers.
+        // Data starts at Row 4 (index 3).
+        const rows = data.slice(3);
+
+        let importedCount = 0;
+        for (const row of rows) {
+          const barcode = String(row[0] || '').trim();
+          const name = String(row[1] || '').trim();
+          const location = String(row[2] || '').trim();
+          const model = String(row[3] || '').trim();
+          const vendor = String(row[4] || '').trim();
+
+          if (barcode && name) {
+            const partRef = doc(db, 'spareparts', barcode);
+            // We use merge: true to avoid overwriting stock if it already exists
+            await setDoc(partRef, {
+              barcode,
+              name,
+              location,
+              model,
+              vendor,
+              description: '',
+              // Only set stock to 0 if it doesn't exist yet
+            }, { merge: true });
+            
+            // If it's a new part, we should ensure stock is initialized
+            const partSnap = await getDoc(partRef);
+            if (!partSnap.exists() || partSnap.data()?.stock === undefined) {
+              await updateDoc(partRef, { stock: 0 });
+            }
+            
+            importedCount++;
+          }
+        }
+
+        setMessage({ type: 'success', text: `Successfully imported ${importedCount} spare parts.` });
+        const snap = await getDocs(collection(db, 'spareparts'));
+        setStats(prev => ({ ...prev, totalParts: snap.size }));
+        setShowSettings(false);
+      };
+      reader.readAsBinaryString(file);
+    } catch (err) {
+      console.error("Import error:", err);
+      setMessage({ type: 'error', text: "Failed to import Excel file." });
+    } finally {
+      setIsClearing(false);
+      setTimeout(() => setMessage(null), 5000);
     }
   };
 
@@ -383,6 +453,27 @@ export default function App() {
                       <p className="text-xs text-stone-500">Total reset of spare parts list</p>
                     </div>
                   </button>
+
+                  <div className="pt-4 border-t border-white/10">
+                    <label className="block w-full p-5 bg-emerald-500/10 rounded-2xl border border-emerald-500/20 cursor-pointer hover:bg-emerald-500/20 transition-all group">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 bg-emerald-500/20 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                          <Plus className="w-5 h-5 text-emerald-500" />
+                        </div>
+                        <div className="text-left">
+                          <p className="font-bold text-emerald-400">Import from Excel</p>
+                          <p className="text-xs text-emerald-500/70">Upload your inventory list (.xlsx)</p>
+                        </div>
+                      </div>
+                      <input 
+                        type="file" 
+                        accept=".xlsx, .xls" 
+                        className="hidden" 
+                        onChange={handleImportExcel}
+                        disabled={isClearing}
+                      />
+                    </label>
+                  </div>
                 </div>
 
                 <button 
@@ -625,8 +716,15 @@ export default function App() {
                   <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase tracking-widest text-stone-500">Part Name</label>
                     {currentPart ? (
-                      <div className="p-5 bg-brand-bg border border-brand-border rounded-xl">
+                      <div className="p-5 bg-brand-bg border border-brand-border rounded-xl space-y-2">
                         <p className="text-xl font-bold text-white">{currentPart.name}</p>
+                        {(currentPart.location || currentPart.model || currentPart.vendor) && (
+                          <div className="flex flex-wrap gap-2 pt-2 border-t border-white/5">
+                            {currentPart.location && <span className="text-[10px] bg-white/5 px-2 py-1 rounded text-stone-400 uppercase tracking-widest">Loc: {currentPart.location}</span>}
+                            {currentPart.model && <span className="text-[10px] bg-white/5 px-2 py-1 rounded text-stone-400 uppercase tracking-widest">Model: {currentPart.model}</span>}
+                            {currentPart.vendor && <span className="text-[10px] bg-white/5 px-2 py-1 rounded text-stone-400 uppercase tracking-widest">Vendor: {currentPart.vendor}</span>}
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <input 
