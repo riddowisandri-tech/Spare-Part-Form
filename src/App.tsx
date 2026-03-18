@@ -518,6 +518,7 @@ export default function App() {
                         <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-stone-500">Barcode</th>
                         <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-stone-500">Technician</th>
                         <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-stone-500">Qty</th>
+                        <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-stone-500">Remark</th>
                         <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-stone-500">Time</th>
                       </tr>
                     </thead>
@@ -534,6 +535,7 @@ export default function App() {
                             <td className="px-6 py-4 font-mono text-sm text-white font-bold">{tx.partBarcode}</td>
                             <td className="px-6 py-4 text-sm font-medium">{tx.technicianName}</td>
                             <td className="px-6 py-4 text-sm font-bold text-white">{tx.quantity || 1}</td>
+                            <td className="px-6 py-4 text-xs text-stone-400 max-w-[150px] truncate" title={tx.notes}>{tx.notes || '-'}</td>
                             <td className="px-6 py-4 text-xs text-stone-500">
                               {tx.timestamp?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </td>
@@ -705,6 +707,7 @@ export default function App() {
                         <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-stone-500">Barcode</th>
                         <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-stone-500">Technician</th>
                         <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-stone-500">Qty</th>
+                        <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-stone-500">Remark</th>
                         <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-stone-500">Date & Time</th>
                       </tr>
                     </thead>
@@ -714,6 +717,7 @@ export default function App() {
                           <td className="px-6 py-4 font-mono text-sm text-white font-bold">{tx.partBarcode}</td>
                           <td className="px-6 py-4 text-sm font-medium">{tx.technicianName}</td>
                           <td className="px-6 py-4 text-sm font-bold text-white">{tx.quantity || 1}</td>
+                          <td className="px-6 py-4 text-xs text-stone-400 max-w-[200px] truncate" title={tx.notes}>{tx.notes || '-'}</td>
                           <td className="px-6 py-4 text-xs text-stone-500">
                             {tx.timestamp?.toDate().toLocaleString()}
                           </td>
