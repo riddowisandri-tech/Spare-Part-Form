@@ -107,6 +107,15 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
   const [confirmAction, setConfirmAction] = useState<{ type: 'history' | 'parts', title: string, message: string } | null>(null);
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Clock Timer
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const usbInputRef = useRef<HTMLInputElement>(null);
 
@@ -944,14 +953,9 @@ export default function App() {
         </div>
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
-            <span className="text-[9px] font-bold text-stone-600 uppercase tracking-widest">User:</span>
-            <span className="text-[9px] font-black text-stone-400 uppercase tracking-widest">Technician Mode</span>
-          </div>
-          <div className="h-3 w-[1px] bg-white/10"></div>
-          <div className="flex items-center gap-2">
             <Clock className="w-3 h-3 text-stone-600" />
             <span className="text-[9px] font-black text-stone-400 uppercase tracking-widest font-mono">
-              {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
             </span>
           </div>
         </div>
