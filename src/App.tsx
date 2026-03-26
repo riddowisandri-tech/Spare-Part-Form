@@ -35,7 +35,8 @@ import {
   Search,
   X,
   Camera,
-  Zap
+  Zap,
+  LayoutDashboard
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -70,28 +71,21 @@ interface Transaction {
 // --- Components ---
 
 const Logo = () => (
-  <div className="flex items-center gap-3">
-    <div className="shrink-0 relative">
-      <div className="absolute inset-0 bg-brand-accent/20 blur-lg rounded-full"></div>
-      <svg width="90" height="36" viewBox="0 0 140 55" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-8 w-auto relative z-10">
-        {/* S */}
-        <text x="0" y="35" fontFamily="Space Grotesk, sans-serif" fontWeight="900" fontSize="42" fill="white">S</text>
-        {/* First i */}
-        <rect x="28" y="15" width="7" height="22" fill="white"/>
-        <circle cx="31.5" cy="8" r="5" fill="var(--color-brand-accent)"/>
-        {/* Second i */}
-        <rect x="42" y="15" width="7" height="22" fill="white"/>
-        <circle cx="45.5" cy="44" r="5" fill="#F7941D"/>
-        {/* X */}
-        <text x="56" y="35" fontFamily="Space Grotesk, sans-serif" fontWeight="900" fontSize="42" fill="white">X</text>
-        {/* We care. */}
-        <text x="60" y="52" fontFamily="Inter, sans-serif" fontSize="14" fontStyle="italic" fontWeight="bold" fill="white">We care.</text>
-      </svg>
-    </div>
-    <div className="flex flex-col border-l-2 border-brand-accent/30 pl-4 shrink-0">
-      <span className="font-display font-black tracking-tighter text-xl text-white uppercase leading-none whitespace-nowrap">Spare Part</span>
-      <span className="font-display font-black tracking-tighter text-xl text-brand-accent uppercase leading-none whitespace-nowrap">Form</span>
-    </div>
+  <div className="w-full flex items-center justify-center py-2">
+    <svg viewBox="0 0 240 110" className="w-full h-auto max-h-20 drop-shadow-[0_0_8px_rgba(255,255,255,0.1)]">
+      {/* SIIX Text - White as per reference */}
+      <text x="10" y="75" fontFamily="'Arial Black', 'Arial', sans-serif" fontSize="85" fontWeight="900" fill="white" letterSpacing="-6">
+        siix
+      </text>
+      {/* Light Blue Dot - Above first 'i' */}
+      <circle cx="82" cy="18" r="13" fill="#72B1E1" />
+      {/* Orange Dot - Below second 'i' */}
+      <circle cx="128" cy="95" r="13" fill="#F58220" />
+      {/* We care. Text - White, Italic, Bold */}
+      <text x="145" y="105" fontFamily="Georgia, serif" fontSize="22" fontStyle="italic" fontWeight="bold" fill="white">
+        W e   c a r e .
+      </text>
+    </svg>
   </div>
 );
 
@@ -99,6 +93,7 @@ export default function App() {
   const [view, setView] = useState<'home' | 'scan' | 'form' | 'history'>('home');
   const [scannedBarcode, setScannedBarcode] = useState<string | null>(null);
   const [currentPart, setCurrentPart] = useState<SparePart | null>(null);
+  const [parts, setParts] = useState<SparePart[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
@@ -107,6 +102,14 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
   const [confirmAction, setConfirmAction] = useState<{ type: 'history' | 'parts', title: string, message: string } | null>(null);
+  const [pendingTransaction, setPendingTransaction] = useState<{
+    barcode: string;
+    partName: string;
+    technicianName: string;
+    quantity: number;
+    notes: string;
+    isNewPart: boolean;
+  } | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
 
   // Clock Timer
@@ -139,12 +142,16 @@ export default function App() {
       setStats(prev => ({ ...prev, todayTxs: todayCount }));
     });
 
-    // Get total parts count
-    getDocs(collection(db, 'spareparts')).then(snap => {
+    // Get total parts count & parts list
+    const unsubscribeParts = onSnapshot(collection(db, 'spareparts'), (snap) => {
       setStats(prev => ({ ...prev, totalParts: snap.size }));
+      setParts(snap.docs.map(d => ({ id: d.id, ...d.data() } as any)));
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      unsubscribeParts();
+    };
   }, []);
 
   const executeClearHistory = async () => {
@@ -271,29 +278,42 @@ export default function App() {
     }
   };
 
-  const handleTransaction = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleTransaction = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!scannedBarcode) return;
 
-    setIsSubmitting(true);
     const formData = new FormData(e.currentTarget);
     const technicianName = formData.get('technicianName') as string;
-    const action = 'take';
     const quantity = parseInt(formData.get('quantity') as string) || 1;
     const notes = formData.get('notes') as string;
-    const partName = formData.get('name') as string || currentPart?.name;
+    const partName = (formData.get('name') as string || currentPart?.name || scannedBarcode) as string;
 
     if (!technicianName) {
       setMessage({ type: 'error', text: "Please enter your name." });
-      setIsSubmitting(false);
       return;
     }
 
+    setPendingTransaction({
+      barcode: scannedBarcode,
+      partName,
+      technicianName,
+      quantity,
+      notes,
+      isNewPart: !currentPart
+    });
+  };
+
+  const executeTransaction = async () => {
+    if (!pendingTransaction) return;
+    
+    setIsSubmitting(true);
+    const { barcode, partName, technicianName, quantity, notes, isNewPart } = pendingTransaction;
+
     try {
-      const partRef = doc(db, 'spareparts', scannedBarcode);
-      if (!currentPart) {
+      const partRef = doc(db, 'spareparts', barcode);
+      if (isNewPart) {
         await setDoc(partRef, {
-          barcode: scannedBarcode,
+          barcode,
           name: partName,
           description: '',
           stock: 0
@@ -301,25 +321,25 @@ export default function App() {
         setStats(prev => ({ ...prev, totalParts: prev.totalParts + 1 }));
       } else {
         // Update existing stock
-        const newStock = Math.max(0, (currentPart.stock || 0) - quantity);
-        
+        const newStock = Math.max(0, (currentPart?.stock || 0) - quantity);
         await updateDoc(partRef, { stock: newStock });
       }
 
       await addDoc(collection(db, 'transactions'), {
-        partBarcode: scannedBarcode,
-        partName: partName,
-        technicianName: technicianName,
-        action,
+        partBarcode: barcode,
+        partName,
+        technicianName,
+        action: 'take',
         quantity,
         notes,
         timestamp: serverTimestamp()
       });
 
-      setMessage({ type: 'success', text: `Successfully recorded taking ${quantity}x ${partName || scannedBarcode}` });
+      setMessage({ type: 'success', text: `Successfully recorded taking ${quantity}x ${partName}` });
       setView('home');
       setScannedBarcode(null);
       setCurrentPart(null);
+      setPendingTransaction(null);
     } catch (error) {
       console.error("Transaction failed", error);
       setMessage({ type: 'error', text: "Failed to save data. Please try again." });
@@ -330,106 +350,83 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-brand-bg text-stone-300 font-sans flex">
+    <div className="min-h-screen bg-brand-bg text-slate-300 font-sans flex">
       {/* Sidebar - Desktop */}
-      <aside className="hidden lg:flex w-64 flex-col border-r border-brand-border bg-brand-surface sticky top-0 h-screen">
-        <div className="p-6 mb-4">
+      <aside className="hidden lg:flex w-28 flex-col bg-black sticky top-0 h-screen py-8 items-center">
+        <div className="flex flex-col items-center gap-12 w-full px-4">
           <Logo />
-        </div>
-        
-        <nav className="flex-1 px-4 space-y-2">
-          <button 
-            onClick={() => setView('home')}
-            className={cn(
-              "w-full flex items-center gap-4 px-6 py-4 rounded-2xl transition-all font-black uppercase tracking-widest text-[10px] italic group",
-              view === 'home' ? "bg-brand-accent/10 text-brand-accent border border-brand-accent/20 shadow-[0_0_15px_rgba(0,240,255,0.1)]" : "text-stone-500 hover:text-white hover:bg-white/5"
-            )}
-          >
-            <Box className={cn("w-5 h-5 transition-transform group-hover:scale-110", view === 'home' ? "text-brand-accent" : "text-stone-600")} />
-            Inventory
-          </button>
-          <button 
-            onClick={() => setView('scan')}
-            className={cn(
-              "w-full flex items-center gap-4 px-6 py-4 rounded-2xl transition-all font-black uppercase tracking-widest text-[10px] italic group",
-              view === 'scan' ? "bg-brand-accent/10 text-brand-accent border border-brand-accent/20 shadow-[0_0_15px_rgba(0,240,255,0.1)]" : "text-stone-500 hover:text-white hover:bg-white/5"
-            )}
-          >
-            <Scan className={cn("w-5 h-5 transition-transform group-hover:scale-110", view === 'scan' ? "text-brand-accent" : "text-stone-600")} />
-            Scan Part
-          </button>
-          <button 
-            onClick={() => setView('history')}
-            className={cn(
-              "w-full flex items-center gap-4 px-6 py-4 rounded-2xl transition-all font-black uppercase tracking-widest text-[10px] italic group",
-              view === 'history' ? "bg-brand-accent/10 text-brand-accent border border-brand-accent/20 shadow-[0_0_15px_rgba(0,240,255,0.1)]" : "text-stone-500 hover:text-white hover:bg-white/5"
-            )}
-          >
-            <History className={cn("w-5 h-5 transition-transform group-hover:scale-110", view === 'history' ? "text-brand-accent" : "text-stone-600")} />
-            History
-          </button>
-        </nav>
+          
+          <nav className="w-full flex flex-col items-center gap-4">
+            <button 
+              onClick={() => setView('home')}
+              className={cn("sidebar-item", view === 'home' && "active")}
+              title="Dashboard"
+            >
+              <LayoutDashboard className="w-6 h-6" />
+            </button>
+            
+            <button 
+              onClick={() => setView('scan')}
+              className={cn("sidebar-item", view === 'scan' && "active")}
+              title="Scan Barcode"
+            >
+              <Scan className="w-6 h-6" />
+            </button>
+            
+            <button 
+              onClick={() => setView('history')}
+              className={cn("sidebar-item", view === 'history' && "active")}
+              title="Transaction History"
+            >
+              <History className="w-6 h-6" />
+            </button>
 
-        <div className="p-4 border-t border-brand-border space-y-2">
-          <button 
-            onClick={() => setShowSettings(true)}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-stone-500 hover:text-stone-300 hover:bg-white/5 transition-all font-medium"
-          >
-            <Settings className="w-5 h-5" />
-            Settings
-          </button>
+            <button 
+              onClick={() => setShowSettings(true)}
+              className="sidebar-item"
+              title="Settings"
+            >
+              <Settings className="w-6 h-6" />
+            </button>
+          </nav>
         </div>
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <header className="bg-brand-surface/80 backdrop-blur-md border-b border-brand-border px-6 py-4 sticky top-0 z-30 flex items-center justify-between">
+        <header className="px-8 py-6 flex items-center justify-between">
           <div className="lg:hidden">
-            <Logo />
+            <div className="w-24">
+              <Logo />
+            </div>
           </div>
-          <div className="hidden lg:block relative max-w-md w-full">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-600" />
-            <input 
-              placeholder="Search parts, transactions..."
-              className="w-full bg-brand-bg border border-brand-border rounded-xl pl-11 pr-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-accent/50 transition-all"
-            />
-          </div>
-          
-          <div className="flex items-center gap-4">
-            {/* Settings moved to sidebar only */}
+          <div className="hidden lg:block">
+            <h1 className="text-sm font-bold text-slate-400 uppercase tracking-[0.2em]">Spare Parts Form System</h1>
           </div>
         </header>
 
-        <main className="flex-1 p-6 lg:p-8 overflow-x-hidden relative">
-          {/* Background Scan Line Animation */}
-          <div className="fixed inset-0 pointer-events-none z-[-1] opacity-5 overflow-hidden">
-            <motion.div 
-              animate={{ top: ['-10%', '110%'] }}
-              transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
-              className="absolute left-0 right-0 h-[2px] bg-brand-accent shadow-[0_0_20px_rgba(0,240,255,1)]"
-            />
-          </div>
+        <main className="flex-1 p-8 lg:p-12 overflow-y-auto relative">
           <AnimatePresence mode="wait">
           {showSettings && (
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm"
+              className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-900/40 backdrop-blur-sm"
             >
               <motion.div 
-                initial={{ scale: 0.9, y: 20 }}
+                initial={{ scale: 0.95, y: 10 }}
                 animate={{ scale: 1, y: 0 }}
-                className="w-full max-w-md glass-panel p-8 shadow-2xl"
+                className="w-full max-w-md bg-white rounded-3xl p-8 shadow-2xl border border-brand-border"
               >
                 <div className="flex items-center justify-between mb-8">
-                  <h3 className="text-2xl font-black text-white uppercase tracking-tighter italic">Settings</h3>
-                  <button onClick={() => setShowSettings(false)} className="p-2 bg-white/5 rounded-xl text-stone-400 hover:text-white transition-all">
+                  <h3 className="text-xl font-bold text-slate-900">System Settings</h3>
+                  <button onClick={() => setShowSettings(false)} className="p-2 hover:bg-slate-50 rounded-lg text-slate-400 hover:text-slate-900 transition-all">
                     <X className="w-5 h-5" />
                   </button>
                 </div>
 
-                <div className="space-y-6">
+                <div className="space-y-4">
                   <button 
                     onClick={() => setConfirmAction({ 
                       type: 'history', 
@@ -437,14 +434,14 @@ export default function App() {
                       message: 'Are you sure you want to delete all transaction logs? This cannot be undone.' 
                     })}
                     disabled={isClearing}
-                    className="w-full p-5 bg-white/5 rounded-2xl flex items-center gap-4 hover:bg-white/10 transition-all border border-white/5 disabled:opacity-50"
+                    className="w-full p-4 bg-slate-50 rounded-2xl flex items-center gap-4 hover:bg-slate-100 transition-all border border-brand-border disabled:opacity-50 group"
                   >
-                    <div className="w-10 h-10 bg-orange-500/10 rounded-xl flex items-center justify-center">
+                    <div className="w-10 h-10 bg-orange-500/10 rounded-xl flex items-center justify-center group-hover:bg-orange-500/20 transition-colors">
                       <History className="w-5 h-5 text-orange-500" />
                     </div>
                     <div className="text-left">
-                      <p className="font-bold text-white">Clear All History</p>
-                      <p className="text-xs text-stone-500">Delete all transaction logs</p>
+                      <p className="font-bold text-slate-900 text-sm">Clear All History</p>
+                      <p className="text-xs text-slate-500">Delete all transaction logs</p>
                     </div>
                   </button>
 
@@ -455,25 +452,25 @@ export default function App() {
                       message: 'Are you sure you want to delete all parts? All stock and names will be lost.' 
                     })}
                     disabled={isClearing}
-                    className="w-full p-5 bg-white/5 rounded-2xl flex items-center gap-4 hover:bg-white/10 transition-all border border-white/5 disabled:opacity-50"
+                    className="w-full p-4 bg-slate-50 rounded-2xl flex items-center gap-4 hover:bg-slate-100 transition-all border border-brand-border disabled:opacity-50 group"
                   >
-                    <div className="w-10 h-10 bg-red-500/10 rounded-xl flex items-center justify-center">
+                    <div className="w-10 h-10 bg-red-500/10 rounded-xl flex items-center justify-center group-hover:bg-red-500/20 transition-colors">
                       <Box className="w-5 h-5 text-red-500" />
                     </div>
                     <div className="text-left">
-                      <p className="font-bold text-white">Clear All Parts Data</p>
-                      <p className="text-xs text-stone-500">Total reset of spare parts list</p>
+                      <p className="font-bold text-slate-900 text-sm">Clear All Parts Data</p>
+                      <p className="text-xs text-slate-500">Total reset of spare parts list</p>
                     </div>
                   </button>
 
-                  <div className="pt-4 border-t border-white/10">
-                    <label className="block w-full p-5 bg-emerald-500/10 rounded-2xl border border-emerald-500/20 cursor-pointer hover:bg-emerald-500/20 transition-all group">
+                  <div className="pt-4 border-t border-brand-border">
+                    <label className="block w-full p-5 bg-emerald-500/5 rounded-2xl border border-emerald-500/20 cursor-pointer hover:bg-emerald-500/10 transition-all group">
                       <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 bg-emerald-500/20 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <div className="w-10 h-10 bg-emerald-500/10 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
                           <Plus className="w-5 h-5 text-emerald-500" />
                         </div>
                         <div className="text-left">
-                          <p className="font-bold text-emerald-400">Import from Excel</p>
+                          <p className="font-bold text-emerald-600">Import from Excel</p>
                           <p className="text-xs text-emerald-500/70">Upload your inventory list (.xlsx)</p>
                         </div>
                       </div>
@@ -490,7 +487,7 @@ export default function App() {
 
                 <button 
                   onClick={() => setShowSettings(false)}
-                  className="w-full mt-8 py-4 bg-white/5 text-stone-400 rounded-2xl font-bold hover:text-white transition-all"
+                  className="w-full mt-8 py-4 bg-slate-50 text-slate-500 rounded-2xl font-bold hover:text-slate-900 transition-all border border-brand-border"
                 >
                   Close
                 </button>
@@ -505,34 +502,109 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-black/90 backdrop-blur-md"
+              className="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-slate-900/40 backdrop-blur-sm"
             >
               <motion.div 
-                initial={{ scale: 0.9, y: 20 }}
+                initial={{ scale: 0.95, y: 10 }}
                 animate={{ scale: 1, y: 0 }}
-                className="w-full max-w-sm glass-panel p-8 text-center"
+                className="w-full max-w-sm bg-white rounded-3xl shadow-2xl border border-brand-border overflow-hidden"
               >
-                <div className="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                  <AlertCircle className="w-8 h-8 text-red-500" />
+                <div className="p-8 text-center">
+                  <div className="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                    <AlertCircle className="w-8 h-8 text-red-500" />
+                  </div>
+                  <h3 className="text-xl font-bold text-slate-900 mb-2">{confirmAction.title}</h3>
+                  <p className="text-slate-500 text-sm mb-8 leading-relaxed">{confirmAction.message}</p>
+                  
+                  <div className="flex flex-col gap-3">
+                    <button 
+                      onClick={confirmAction.type === 'history' ? executeClearHistory : executeClearParts}
+                      disabled={isClearing}
+                      className="w-full py-4 bg-red-500 text-white rounded-2xl font-bold hover:bg-red-600 transition-all flex items-center justify-center gap-2 shadow-lg shadow-red-500/20"
+                    >
+                      {isClearing && <Loader2 className="w-4 h-4 animate-spin" />}
+                      Confirm Delete
+                    </button>
+                    <button 
+                      onClick={() => setConfirmAction(null)}
+                      className="w-full py-4 bg-slate-50 text-slate-500 rounded-2xl font-bold hover:text-slate-900 transition-all"
+                    >
+                      Cancel
+                    </button>
+                  </div>
                 </div>
-                <h3 className="text-xl font-black text-white mb-2 uppercase tracking-tighter italic">{confirmAction.title}</h3>
-                <p className="text-stone-400 text-sm mb-8 leading-relaxed">{confirmAction.message}</p>
-                
-                <div className="flex flex-col gap-3">
-                  <button 
-                    onClick={confirmAction.type === 'history' ? executeClearHistory : executeClearParts}
-                    disabled={isClearing}
-                    className="w-full py-4 bg-red-500 text-white rounded-xl font-bold hover:bg-red-400 transition-all flex items-center justify-center gap-2"
-                  >
-                    {isClearing && <Loader2 className="w-4 h-4 animate-spin" />}
-                    Confirm Delete
-                  </button>
-                  <button 
-                    onClick={() => setConfirmAction(null)}
-                    className="w-full py-4 bg-white/5 text-stone-400 rounded-xl font-bold hover:text-white transition-all"
-                  >
-                    Cancel
-                  </button>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {pendingTransaction && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-slate-900/40 backdrop-blur-sm"
+            >
+              <motion.div 
+                initial={{ scale: 0.95, y: 10 }}
+                animate={{ scale: 1, y: 0 }}
+                className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-brand-border overflow-hidden"
+              >
+                <div className="p-8">
+                  <div className="flex items-center gap-4 mb-6">
+                    <div className="w-12 h-12 bg-brand-accent/10 rounded-2xl flex items-center justify-center">
+                      <CheckCircle2 className="w-6 h-6 text-brand-accent" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-slate-900">Confirm Transaction</h3>
+                      <p className="text-xs text-slate-500 font-medium">Please review the details below</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4 bg-slate-50 rounded-2xl p-6 mb-8 border border-brand-border">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Part Name</p>
+                        <p className="text-sm font-bold text-slate-900">{pendingTransaction.partName}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Quantity</p>
+                        <p className="text-sm font-bold text-slate-900">{pendingTransaction.quantity} Units</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Technician</p>
+                        <p className="text-sm font-bold text-slate-900">{pendingTransaction.technicianName}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Barcode</p>
+                        <p className="text-sm font-mono text-slate-500">{pendingTransaction.barcode}</p>
+                      </div>
+                    </div>
+                    {pendingTransaction.notes && (
+                      <div className="pt-4 border-t border-brand-border">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Notes</p>
+                        <p className="text-sm text-slate-500 italic">"{pendingTransaction.notes}"</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex gap-3">
+                    <button 
+                      onClick={() => setPendingTransaction(null)}
+                      className="flex-1 py-4 bg-slate-50 text-slate-500 rounded-2xl font-bold hover:text-slate-900 transition-all"
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      onClick={executeTransaction}
+                      disabled={isSubmitting}
+                      className="flex-[2] py-4 bg-brand-accent text-white rounded-2xl font-bold hover:bg-brand-accent/90 transition-all flex items-center justify-center gap-2 shadow-lg shadow-brand-accent/20"
+                    >
+                      {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                      Confirm & Save
+                    </button>
+                  </div>
                 </div>
               </motion.div>
             </motion.div>
@@ -562,124 +634,177 @@ export default function App() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="space-y-8"
+              className="grid grid-cols-1 lg:grid-cols-12 gap-8"
             >
-              {/* Stats & Actions Bento Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Total Parts Card */}
-                <div className="bento-card md:col-span-1 min-h-[200px]">
-                  <div>
-                    <div className="w-12 h-12 bg-blue-500/10 rounded-2xl flex items-center justify-center mb-6">
-                      <Box className="w-6 h-6 text-blue-500" />
-                    </div>
-                    <h3 className="text-4xl font-black data-value">{stats.totalParts}</h3>
-                    <p className="text-xs text-stone-600 mt-2 font-bold uppercase tracking-widest">Total Registered Parts</p>
+              {/* Left Column: Hero, Trending, Analytics */}
+              <div className="lg:col-span-8 space-y-8">
+                {/* Hero Section */}
+                <div className="bg-white rounded-[40px] p-10 flex flex-col md:flex-row items-center justify-between relative overflow-hidden shadow-sm">
+                  <div className="relative z-10 max-w-md">
+                    <h2 className="text-4xl font-bold text-slate-900 mb-4 tracking-tight">Hi Engineering Team.</h2>
+                    <p className="text-slate-500 text-sm leading-relaxed mb-8">
+                      Please complete this spare parts form whenever you take any spare parts. Thank you for your cooperation.
+                    </p>
                   </div>
-                  <div className="flex items-center gap-2 mt-4">
-                    <div className="status-dot bg-blue-500"></div>
-                    <span className="text-[10px] font-bold text-blue-500/50 uppercase tracking-widest">System Online</span>
-                  </div>
-                </div>
-
-                {/* Activity Card */}
-                <div className="bento-card md:col-span-1 min-h-[200px]">
-                  <div>
-                    <div className="w-12 h-12 bg-brand-accent/10 rounded-2xl flex items-center justify-center mb-6">
-                      <TrendingUp className="w-6 h-6 text-brand-accent" />
-                    </div>
-                    <h3 className="text-4xl font-black data-value">{stats.todayTxs}</h3>
-                    <p className="text-xs text-stone-600 mt-2 font-bold uppercase tracking-widest">Transactions Recorded</p>
-                  </div>
-                  <div className="flex items-center gap-2 mt-4">
-                    <div className="status-dot bg-brand-accent"></div>
-                    <span className="text-[10px] font-bold text-brand-accent/50 uppercase tracking-widest">Real-time Syncing</span>
+                  <div className="relative mt-8 md:mt-0">
+                    <img 
+                      src="https://img.freepik.com/free-vector/flat-design-character-working-from-home_23-2148856693.jpg" 
+                      alt="Illustration" 
+                      className="w-64 h-auto rounded-3xl"
+                      referrerPolicy="no-referrer"
+                    />
                   </div>
                 </div>
 
-                {/* Main Action Card */}
-                <button 
-                  onClick={() => setView('scan')}
-                  className="bento-card md:col-span-1 bg-brand-bg hover:bg-brand-surface transition-all group active:scale-[0.98] min-h-[200px] border border-brand-accent/30 relative overflow-hidden shadow-[0_0_30px_rgba(0,240,255,0.1)]"
-                >
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-brand-accent/10 rounded-full -mr-16 -mt-16 blur-3xl group-hover:bg-brand-accent/20 transition-colors"></div>
-                  
-                  <div className="flex justify-between items-start w-full relative z-10">
-                    <div className="w-12 h-12 bg-brand-accent/10 rounded-2xl flex items-center justify-center group-hover:rotate-12 transition-transform shadow-[0_0_15px_rgba(0,240,255,0.2)] border border-brand-accent/20">
-                      <Scan className="w-6 h-6 text-brand-accent" />
-                    </div>
-                    <div className="flex items-center gap-1 bg-brand-accent/5 px-3 py-1 rounded-full border border-brand-accent/10 backdrop-blur-sm">
-                      <span className="text-[8px] font-black uppercase tracking-widest text-brand-accent/80">System Active</span>
-                      <div className="w-1 h-1 rounded-full bg-brand-accent animate-pulse"></div>
-                    </div>
+                {/* Trending Section -> Recent Parts */}
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xl font-bold text-slate-900">Recent Parts</h3>
                   </div>
-                  
-                  <div className="text-left relative z-10">
-                    <h3 className="text-5xl font-black uppercase italic leading-[0.8] mb-3 text-white tracking-tighter group-hover:text-brand-accent transition-colors">
-                      Start<br />
-                      Scanning
-                    </h3>
-                    <div className="flex items-center gap-2">
-                      <div className="h-[2px] w-6 bg-brand-accent/30"></div>
-                      <p className="text-stone-500 font-black text-[10px] uppercase tracking-widest group-hover:text-stone-400 transition-colors">USB Scanner or Camera</p>
-                    </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {parts.slice(0, 3).map((part, i) => (
+                      <div key={part.id} className={cn("rounded-[32px] p-6 shadow-sm flex flex-col justify-between min-h-[220px]", i === 1 ? "bg-black text-white" : "bg-white")}>
+                        <div>
+                          <div className="flex items-center justify-between mb-4">
+                            <h4 className="font-bold truncate pr-2">{part.name}</h4>
+                            <div className={cn("w-2 h-2 rounded-full", part.stock < 10 ? "bg-red-500" : "bg-green-500")}></div>
+                          </div>
+                          <p className={cn("text-xs leading-relaxed opacity-70 font-mono", i === 1 ? 'text-white' : 'text-slate-500')}>
+                            {part.barcode}
+                          </p>
+                          <p className={cn("text-[10px] mt-2 font-bold uppercase tracking-widest opacity-50", i === 1 ? 'text-white' : 'text-slate-400')}>
+                            Location: {part.location || 'N/A'}
+                          </p>
+                        </div>
+                        <div className="flex items-center justify-between mt-6">
+                          <div className="flex items-center gap-2">
+                            <span className="text-2xl font-bold tracking-tight">{part.stock}</span>
+                            <span className="text-[10px] font-bold uppercase tracking-widest opacity-50">Units</span>
+                          </div>
+                          <div className="flex items-center gap-1 opacity-70">
+                            <TrendingUp className="w-3 h-3" />
+                            <span className="text-[10px] font-bold">Active</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {parts.length === 0 && (
+                      <div className="col-span-3 py-12 text-center bg-white rounded-[32px] border border-dashed border-slate-200 text-slate-400 text-sm italic">
+                        No parts registered yet.
+                      </div>
+                    )}
                   </div>
-                </button>
+                </div>
+
+                {/* Analytics Section -> Transaction Activity */}
+                <div className="bg-white rounded-[40px] p-10 shadow-sm">
+                  <div className="flex items-center justify-between mb-10">
+                    <h3 className="text-2xl font-bold text-slate-900">Inventory Activity</h3>
+                  </div>
+                  <div className="h-48 w-full relative">
+                    <svg viewBox="0 0 800 200" className="w-full h-full overflow-visible">
+                      <defs>
+                        <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="black" stopOpacity="0.1" />
+                          <stop offset="100%" stopColor="black" stopOpacity="0" />
+                        </linearGradient>
+                      </defs>
+                      {/* Grid Lines */}
+                      {[0, 50, 100, 150, 200].map((y) => (
+                        <line key={y} x1="0" y1={y} x2="800" y2={y} stroke="#f1f5f9" strokeWidth="1" />
+                      ))}
+                      {/* Area Fill */}
+                      <path 
+                        d="M0,180 Q150,120 300,150 T600,110 T800,140 L800,200 L0,200 Z" 
+                        fill="url(#chartGradient)"
+                      />
+                      {/* Main Line */}
+                      <path 
+                        d="M0,180 Q150,120 300,150 T600,110 T800,140" 
+                        fill="none" 
+                        stroke="black" 
+                        strokeWidth="4" 
+                        strokeLinecap="round"
+                        className="drop-shadow-sm"
+                      />
+                      <circle cx="300" cy="150" r="5" fill="black" stroke="white" strokeWidth="2" />
+                      <circle cx="600" cy="110" r="5" fill="black" stroke="white" strokeWidth="2" />
+                      {/* Tooltip */}
+                      <g transform="translate(280, 110)">
+                        <rect width="40" height="24" rx="8" fill="black" />
+                        <text x="20" y="16" textAnchor="middle" fill="white" fontSize="10" fontWeight="bold">{stats.todayTxs}</text>
+                      </g>
+                    </svg>
+                  </div>
+                </div>
               </div>
 
-              {/* Recent Activity Section */}
-              <div className="glass-panel overflow-hidden border-white/5">
-                <div className="p-8 border-b border-brand-border flex items-center justify-between bg-white/[0.01]">
-                  <h3 className="text-xl font-black text-white flex items-center gap-3 uppercase tracking-tighter italic">
-                    <Clock className="w-6 h-6 text-brand-accent" />
-                    Recent Activity
-                  </h3>
-                  <button 
-                    onClick={() => setView('history')} 
-                    className="text-[10px] font-black text-brand-accent hover:text-white transition-colors uppercase tracking-[0.2em] border border-brand-accent/20 px-4 py-2 rounded-full"
-                  >
-                    View Full History
-                  </button>
+              {/* Right Column: Stats, Recent Activity, CTA */}
+              <div className="lg:col-span-4 space-y-8">
+                {/* Stats Cards */}
+                <div className="bg-white rounded-[40px] p-8 space-y-4 shadow-sm">
+                  {[
+                    { label: 'Total Inventory', value: stats.totalParts, icon: <Box className="w-5 h-5" />, color: 'bg-slate-50' },
+                    { label: 'Today Transactions', value: stats.todayTxs, icon: <ArrowRightLeft className="w-5 h-5" />, color: 'bg-slate-50' },
+                    { label: 'Total Logs', value: transactions.length, icon: <History className="w-5 h-5" />, color: 'bg-slate-50' }
+                  ].map((stat, i) => (
+                    <div key={i} className="flex items-center justify-between p-4 rounded-3xl hover:bg-slate-50 transition-all group cursor-default">
+                      <div className="flex items-center gap-4">
+                        <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center", stat.color)}>
+                          {stat.icon}
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{stat.label}</p>
+                          <p className="text-xl font-bold text-slate-900">{stat.value}</p>
+                        </div>
+                      </div>
+                      <ChevronLeft className="w-5 h-5 text-slate-300 rotate-180 group-hover:text-black transition-colors" />
+                    </div>
+                  ))}
                 </div>
-                
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-white/[0.02]">
-                        <th className="px-8 py-5 data-label">Barcode</th>
-                        <th className="px-8 py-5 data-label">Technician</th>
-                        <th className="px-8 py-5 data-label">Qty</th>
-                        <th className="px-8 py-5 data-label">Remark</th>
-                        <th className="px-8 py-5 data-label">Time</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-brand-border">
-                      {transactions.length === 0 ? (
-                        <tr>
-                          <td colSpan={5} className="px-8 py-20 text-center text-stone-700 font-mono text-xs uppercase tracking-widest">
-                            No activity recorded today
-                          </td>
-                        </tr>
-                      ) : (
-                        transactions.slice(0, 10).map((tx) => (
-                          <tr key={tx.id} className="hover:bg-white/[0.02] transition-colors group">
-                            <td className="px-8 py-5 font-mono text-sm text-white font-bold tracking-tighter">{tx.partBarcode}</td>
-                            <td className="px-8 py-5 text-sm font-bold text-stone-300">{tx.technicianName}</td>
-                            <td className="px-8 py-5">
-                              <span className="bg-brand-accent/10 text-brand-accent px-3 py-1 rounded-lg text-xs font-black">
-                                {tx.quantity || 1}
-                              </span>
-                            </td>
-                            <td className="px-8 py-5 text-xs text-stone-500 max-w-[200px] truncate font-medium" title={tx.notes}>
-                              {tx.notes || <span className="opacity-20 italic">No remarks</span>}
-                            </td>
-                            <td className="px-8 py-5 text-[10px] font-mono text-stone-600 uppercase">
-                              {tx.timestamp?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
+
+                {/* Recent Activity Section */}
+                <div className="bg-white rounded-[40px] p-8 shadow-sm">
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-lg font-bold text-slate-900">Recent Activity</h3>
+                  </div>
+                  <div className="space-y-6">
+                    {transactions.slice(0, 4).map((tx, i) => (
+                      <div key={tx.id} className="flex items-center gap-4 group">
+                        <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center shrink-0 group-hover:bg-black group-hover:text-white transition-all">
+                          <History className="w-4 h-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-slate-900 truncate">{tx.partBarcode}</p>
+                          <p className="text-[10px] text-slate-400 font-medium">{tx.technicianName} • {tx.timestamp?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs font-bold text-slate-900">+{tx.quantity || 1}</p>
+                        </div>
+                      </div>
+                    ))}
+                    {transactions.length === 0 && (
+                      <p className="text-center text-slate-400 text-xs italic py-4">No activity today</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* CTA Card -> Quick Scan */}
+                <div className="bg-white rounded-[40px] p-10 shadow-sm text-center relative overflow-hidden group">
+                  <div className="absolute top-0 left-1/2 -translate-x-1/2 opacity-5 group-hover:scale-110 transition-transform duration-500">
+                    <Scan className="w-32 h-32" />
+                  </div>
+                  <div className="relative z-10">
+                    <p className="text-slate-500 text-sm mb-6 px-4">
+                      Ready to update stock? <span className="font-bold text-slate-900">Quick Scan</span> to record transactions.
+                    </p>
+                    <button 
+                      onClick={() => setView('scan')}
+                      className="w-full py-4 bg-black text-white rounded-2xl font-bold text-sm hover:bg-slate-800 transition-all shadow-xl shadow-black/10"
+                    >
+                      Open Scanner
+                    </button>
+                  </div>
                 </div>
               </div>
             </motion.div>
@@ -691,73 +816,73 @@ export default function App() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 20 }}
-              className="max-w-3xl mx-auto space-y-8"
+              className="max-w-4xl mx-auto space-y-10"
             >
               <div className="flex items-center justify-between">
-                <button onClick={() => setView('home')} className="flex items-center gap-3 text-stone-600 hover:text-brand-accent transition-all group">
-                  <div className="w-10 h-10 rounded-full border border-white/5 flex items-center justify-center group-hover:border-brand-accent/30">
+                <button onClick={() => setView('home')} className="flex items-center gap-3 text-slate-500 hover:text-black transition-all group">
+                  <div className="w-10 h-10 rounded-xl border border-slate-200 flex items-center justify-center group-hover:border-black bg-white shadow-sm">
                     <ChevronLeft className="w-5 h-5" />
                   </div>
-                  <span className="font-black uppercase tracking-[0.2em] text-[10px] italic">Back to Dashboard</span>
+                  <span className="font-bold uppercase tracking-widest text-[10px]">Back to Dashboard</span>
                 </button>
-                <h2 className="text-3xl font-black text-white uppercase tracking-tighter italic">Scanner <span className="text-brand-accent">Active</span></h2>
+                <h2 className="text-2xl font-bold text-slate-900">Scanner <span className="text-slate-400">Active</span></h2>
               </div>
 
-              <div className="glass-panel p-10 space-y-10">
-                <div className="relative aspect-video bg-black rounded-3xl overflow-hidden border border-white/10 shadow-2xl group">
+              <div className="bg-white rounded-3xl p-10 space-y-10 shadow-sm border border-brand-border">
+                <div className="relative aspect-video bg-slate-50 rounded-3xl overflow-hidden border-4 border-white shadow-lg group">
                   <Scanner onScanSuccess={onScanSuccess} />
                   
                   {/* Scanner Overlay UI */}
-                  <div className="absolute inset-0 pointer-events-none border-[40px] border-black/40">
-                    <div className="w-full h-full border-2 border-brand-accent/30 relative">
+                  <div className="absolute inset-0 pointer-events-none border-[40px] border-white/40">
+                    <div className="w-full h-full border-2 border-slate-100 relative">
                       {/* Corner Accents */}
-                      <div className="absolute -top-1 -left-1 w-8 h-8 border-t-4 border-l-4 border-brand-accent shadow-[0_0_15px_rgba(0,240,255,0.5)]"></div>
-                      <div className="absolute -top-1 -right-1 w-8 h-8 border-t-4 border-r-4 border-brand-accent shadow-[0_0_15px_rgba(0,240,255,0.5)]"></div>
-                      <div className="absolute -bottom-1 -left-1 w-8 h-8 border-b-4 border-l-4 border-brand-accent shadow-[0_0_15px_rgba(0,240,255,0.5)]"></div>
-                      <div className="absolute -bottom-1 -right-1 w-8 h-8 border-b-4 border-r-4 border-brand-accent shadow-[0_0_15px_rgba(0,240,255,0.5)]"></div>
+                      <div className="absolute -top-1 -left-1 w-8 h-8 border-t-4 border-l-4 border-black rounded-tl-lg"></div>
+                      <div className="absolute -top-1 -right-1 w-8 h-8 border-t-4 border-r-4 border-black rounded-tr-lg"></div>
+                      <div className="absolute -bottom-1 -left-1 w-8 h-8 border-b-4 border-l-4 border-black rounded-bl-lg"></div>
+                      <div className="absolute -bottom-1 -right-1 w-8 h-8 border-b-4 border-r-4 border-black rounded-br-lg"></div>
                       
                       {/* Scanning Line */}
                       <motion.div 
-                        animate={{ top: ['0%', '100%', '0%'] }}
-                        transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-                        className="absolute left-0 right-0 h-0.5 bg-brand-accent/50 shadow-[0_0_10px_rgba(0,240,255,0.5)]"
+                        animate={{ top: ['0%', '100%'] }}
+                        transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                        className="absolute left-0 right-0 h-1 bg-black shadow-[0_0_20px_rgba(0,0,0,0.2)]"
                       />
                     </div>
                   </div>
 
-                  <div className="absolute bottom-8 left-1/2 -translate-x-1/2 px-6 py-3 bg-black/80 backdrop-blur-md rounded-full border border-white/10 flex items-center gap-3">
-                    <div className="w-2 h-2 rounded-full bg-brand-accent animate-pulse shadow-[0_0_8px_rgba(0,240,255,0.8)]"></div>
-                    <span className="text-[10px] font-black text-white uppercase tracking-[0.2em] italic">System Ready: Align Barcode</span>
+                  <div className="absolute bottom-8 left-1/2 -translate-x-1/2 px-6 py-3 bg-white/90 backdrop-blur-md rounded-full border border-brand-border flex items-center gap-3 shadow-lg">
+                    <div className="w-2 h-2 rounded-full bg-black animate-pulse shadow-[0_0_10px_rgba(0,0,0,0.1)]"></div>
+                    <span className="text-xs font-bold text-slate-900 uppercase tracking-widest">System Ready: Align Barcode</span>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="p-6 bg-white/5 rounded-2xl border border-white/5 space-y-2">
-                    <div className="flex items-center gap-2 text-brand-accent">
+                  <div className="p-6 bg-slate-50 rounded-2xl border border-brand-border space-y-2">
+                    <div className="flex items-center gap-2 text-black">
                       <Camera className="w-4 h-4" />
-                      <span className="text-[10px] font-black uppercase tracking-widest italic">Camera Mode</span>
+                      <span className="text-xs font-bold uppercase tracking-widest">Camera Mode</span>
                     </div>
-                    <p className="text-stone-400 text-xs leading-relaxed">Position the barcode within the central frame for automatic detection.</p>
+                    <p className="text-slate-500 text-sm leading-relaxed">Position the barcode within the central frame for automatic detection.</p>
                   </div>
-                  <div className="p-6 bg-white/5 rounded-2xl border border-white/5 space-y-2">
-                    <div className="flex items-center gap-2 text-brand-accent">
+                  <div className="p-6 bg-slate-50 rounded-2xl border border-brand-border space-y-2">
+                    <div className="flex items-center gap-2 text-black">
                       <Zap className="w-4 h-4" />
-                      <span className="text-[10px] font-black uppercase tracking-widest italic">USB Scanner</span>
+                      <span className="text-xs font-bold uppercase tracking-widest">USB Scanner</span>
                     </div>
-                    <p className="text-stone-400 text-xs leading-relaxed">External scanners are supported. Simply scan and the system will redirect.</p>
+                    <p className="text-slate-500 text-sm leading-relaxed">External scanners are supported. Simply scan and the system will redirect.</p>
                   </div>
                 </div>
 
-                <div className="relative">
-                  <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-6 h-6 text-stone-600" />
+                <div className="relative max-w-2xl mx-auto group">
+                  <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-black transition-colors" />
                   <input 
                     ref={usbInputRef}
                     type="text"
                     value={manualBarcode}
                     onChange={(e) => setManualBarcode(e.target.value)}
                     onKeyDown={handleUsbScan}
-                    placeholder="OR TYPE BARCODE MANUALLY..."
-                    className="w-full bg-black/40 border border-white/10 rounded-2xl pl-16 pr-6 py-6 text-white font-mono font-black text-xl outline-none focus:ring-2 focus:ring-brand-accent/50 transition-all placeholder:text-stone-700 uppercase tracking-tighter"
+                    placeholder="Or type barcode manually..."
+                    className="w-full bg-slate-50 border border-brand-border rounded-2xl pl-16 pr-6 py-5 text-slate-900 font-mono font-bold text-lg outline-none focus:ring-4 focus:ring-black/5 focus:border-black transition-all placeholder:text-slate-300"
                     autoFocus
                   />
                 </div>
@@ -771,94 +896,133 @@ export default function App() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="max-w-xl mx-auto space-y-8"
+              className="max-w-5xl mx-auto space-y-8"
             >
               <div className="flex items-center justify-between">
-                <button onClick={() => setView('scan')} className="flex items-center gap-3 text-stone-600 hover:text-brand-accent transition-all group">
-                  <div className="w-10 h-10 rounded-full border border-white/5 flex items-center justify-center group-hover:border-brand-accent/30">
+                <button onClick={() => setView('scan')} className="flex items-center gap-3 text-slate-500 hover:text-black transition-all group">
+                  <div className="w-10 h-10 rounded-xl border border-slate-200 flex items-center justify-center group-hover:border-black bg-white shadow-sm">
                     <ChevronLeft className="w-5 h-5" />
                   </div>
-                  <span className="font-black uppercase tracking-[0.2em] text-[10px] italic">Back to Scan</span>
+                  <span className="font-bold uppercase tracking-widest text-[10px]">Back to Scan</span>
                 </button>
-                <h2 className="text-3xl font-black text-white uppercase tracking-tighter italic">Part Details</h2>
+                <div className="text-right">
+                  <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Record Transaction</h2>
+                  <p className="text-xs text-slate-400 font-medium mt-1">Update inventory stock levels in real-time</p>
+                </div>
               </div>
 
-              <form onSubmit={handleTransaction} className="glass-panel p-10 space-y-10">
-                <div className="space-y-8">
-                  <div className="space-y-3">
-                    <label className="data-label">Barcode ID</label>
-                    <div className="bg-brand-bg border border-brand-border rounded-2xl px-8 py-6 text-brand-accent font-mono font-black text-2xl tracking-tighter shadow-inner">
-                      {scannedBarcode}
+              <div className="bg-white rounded-[32px] shadow-xl border border-brand-border overflow-hidden flex flex-col md:flex-row min-h-[600px]">
+                {/* Left Side: Part Info (Black) */}
+                <div className="md:w-2/5 bg-black p-10 text-white flex flex-col justify-between relative overflow-hidden">
+                  <div className="relative z-10">
+                    <h3 className="text-2xl font-bold mb-4">Part Information</h3>
+                    <p className="text-white/70 text-sm leading-relaxed mb-10">
+                      Review the scanned part details before recording the transaction. Ensure all data is accurate.
+                    </p>
+
+                    <div className="space-y-8">
+                      <div className="flex items-start gap-4">
+                        <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center shrink-0">
+                          <Scan className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-white/50 mb-1">Barcode ID</p>
+                          <p className="text-xl font-mono font-bold tracking-tight">{scannedBarcode}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-4">
+                        <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center shrink-0">
+                          <Package className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-white/50 mb-1">Current Stock</p>
+                          <p className="text-xl font-bold tracking-tight">{currentPart?.stock || 0} Units</p>
+                        </div>
+                      </div>
+
+                      {currentPart?.location && (
+                        <div className="flex items-start gap-4">
+                          <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center shrink-0">
+                            <Box className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-white/50 mb-1">Location</p>
+                            <p className="text-xl font-bold tracking-tight">{currentPart.location}</p>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  <div className="space-y-3">
-                    <label className="data-label">Part Name</label>
-                    {currentPart ? (
-                      <div className="p-6 bg-brand-bg border border-brand-border rounded-2xl space-y-4">
-                        <p className="text-2xl font-black text-white tracking-tight">{currentPart.name}</p>
-                        {(currentPart.location || currentPart.model || currentPart.vendor) && (
-                          <div className="flex flex-wrap gap-3 pt-4 border-t border-white/5">
-                            {currentPart.location && <span className="text-[9px] bg-white/5 px-3 py-1.5 rounded-full text-stone-500 font-black uppercase tracking-widest border border-white/5">Loc: {currentPart.location}</span>}
-                            {currentPart.model && <span className="text-[9px] bg-white/5 px-3 py-1.5 rounded-full text-stone-500 font-black uppercase tracking-widest border border-white/5">Model: {currentPart.model}</span>}
-                            {currentPart.vendor && <span className="text-[9px] bg-white/5 px-3 py-1.5 rounded-full text-stone-500 font-black uppercase tracking-widest border border-white/5">Vendor: {currentPart.vendor}</span>}
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <input 
-                        name="name"
-                        required
-                        placeholder="Enter new part name..."
-                        className="w-full input-field text-xl"
-                      />
-                    )}
-                  </div>
+                  {/* Decorative Circle */}
+                  <div className="absolute -bottom-20 -right-20 w-64 h-64 bg-white/5 rounded-full blur-3xl"></div>
+                </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div className="space-y-3">
-                      <label className="data-label">Technician Name</label>
+                {/* Right Side: Form (White) */}
+                <form onSubmit={handleTransaction} className="md:w-3/5 p-10 md:p-12 space-y-10 bg-white">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                    <div className="space-y-2 md:col-span-2">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Part Name</label>
+                      {currentPart ? (
+                        <div className="py-3 border-b-2 border-slate-100">
+                          <p className="text-xl font-bold text-slate-900">{currentPart.name}</p>
+                        </div>
+                      ) : (
+                        <input 
+                          name="name"
+                          required
+                          placeholder="John Trangely"
+                          className="input-field w-full text-xl"
+                        />
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Technician Name</label>
                       <input 
                         name="technicianName"
                         required
-                        placeholder="Your Name..."
-                        className="w-full input-field"
+                        placeholder="Your Name"
+                        className="input-field w-full"
                       />
                     </div>
 
-                    <div className="space-y-3">
-                      <label className="data-label">Quantity</label>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Quantity</label>
                       <input 
                         type="number"
                         name="quantity"
                         required
                         min="1"
                         defaultValue="1"
-                        className="w-full input-field"
+                        className="input-field w-full"
+                      />
+                    </div>
+
+                    <div className="space-y-2 md:col-span-2">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Additional Notes</label>
+                      <textarea 
+                        name="notes"
+                        placeholder="Write here your message"
+                        rows={3}
+                        className="input-field w-full resize-none"
                       />
                     </div>
                   </div>
 
-                  <div className="space-y-3">
-                    <label className="data-label">Additional Notes</label>
-                    <textarea 
-                      name="notes"
-                      placeholder="Example: Used for Machine A..."
-                      rows={4}
-                      className="w-full input-field resize-none"
-                    />
+                  <div className="pt-6">
+                    <button 
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="btn-primary w-full md:w-auto min-w-[200px] flex items-center justify-center gap-3"
+                    >
+                      {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <ArrowRightLeft className="w-5 h-5" />}
+                      Record Transaction
+                    </button>
                   </div>
-                </div>
-
-                <button 
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="w-full btn-primary py-6 text-xl flex items-center justify-center gap-4 disabled:opacity-50"
-                >
-                  {isSubmitting ? <Loader2 className="w-7 h-7 animate-spin" /> : <CheckCircle2 className="w-7 h-7" />}
-                  Confirm & Save
-                </button>
-              </form>
+                </form>
+              </div>
             </motion.div>
           )}
 
@@ -871,59 +1035,59 @@ export default function App() {
               className="space-y-8"
             >
               <div className="flex items-center justify-between">
-                <button onClick={() => setView('home')} className="flex items-center gap-3 text-stone-600 hover:text-brand-accent transition-all group">
-                  <div className="w-10 h-10 rounded-full border border-white/5 flex items-center justify-center group-hover:border-brand-accent/30">
+                <button onClick={() => setView('home')} className="flex items-center gap-3 text-slate-500 hover:text-black transition-all group">
+                  <div className="w-10 h-10 rounded-xl border border-slate-200 flex items-center justify-center group-hover:border-black bg-white shadow-sm">
                     <ChevronLeft className="w-5 h-5" />
                   </div>
-                  <span className="font-black uppercase tracking-[0.2em] text-[10px] italic">Back to Dashboard</span>
+                  <span className="font-bold uppercase tracking-wider text-[10px]">Back to Dashboard</span>
                 </button>
-                <h2 className="text-4xl font-black text-white uppercase tracking-tighter italic">Transaction <span className="text-brand-accent">History</span></h2>
+                <h2 className="text-2xl font-bold text-slate-900">Transaction History</h2>
               </div>
 
-              <div className="glass-panel overflow-hidden">
+              <div className="bg-white rounded-3xl border border-brand-border shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                     <thead>
-                      <tr className="border-b border-white/10 bg-white/[0.02]">
-                        <th className="px-8 py-6 text-[10px] font-black text-stone-500 uppercase tracking-[0.2em] italic">Timestamp</th>
-                        <th className="px-8 py-6 text-[10px] font-black text-stone-500 uppercase tracking-[0.2em] italic">Part Info</th>
-                        <th className="px-8 py-6 text-[10px] font-black text-stone-500 uppercase tracking-[0.2em] italic">Technician</th>
-                        <th className="px-8 py-6 text-[10px] font-black text-stone-500 uppercase tracking-[0.2em] italic text-center">Qty</th>
-                        <th className="px-8 py-6 text-[10px] font-black text-stone-500 uppercase tracking-[0.2em] italic">Remarks</th>
+                      <tr className="bg-slate-50/50 border-b border-brand-border">
+                        <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Time</th>
+                        <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Part Info</th>
+                        <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Technician</th>
+                        <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Qty</th>
+                        <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Remarks</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-white/5">
+                    <tbody className="divide-y divide-slate-100">
                       {transactions.map((tx) => (
-                        <tr key={tx.id} className="hover:bg-white/[0.02] transition-colors group">
-                          <td className="px-8 py-6">
+                        <tr key={tx.id} className="hover:bg-slate-50 transition-colors group">
+                          <td className="px-8 py-5">
                             <div className="flex flex-col">
-                              <span className="text-white font-mono text-sm">{tx.timestamp?.toDate().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
-                              <span className="text-stone-500 font-mono text-[10px]">{tx.timestamp?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                              <span className="text-slate-900 font-bold text-sm">{tx.timestamp?.toDate().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                              <span className="text-slate-400 font-mono text-[10px]">{tx.timestamp?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
                             </div>
                           </td>
-                          <td className="px-8 py-6">
+                          <td className="px-8 py-5">
                             <div className="flex flex-col gap-1">
-                              <span className="text-white font-black tracking-tight group-hover:text-brand-accent transition-colors">{tx.partName}</span>
-                              <span className="text-stone-500 font-mono text-[10px] tracking-tighter">{tx.partBarcode}</span>
+                              <span className="text-slate-900 font-bold group-hover:text-black transition-colors">{tx.partName}</span>
+                              <span className="text-slate-400 font-mono text-[10px]">{tx.partBarcode}</span>
                             </div>
                           </td>
-                          <td className="px-8 py-6">
+                          <td className="px-8 py-5">
                             <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-brand-accent/10 flex items-center justify-center text-brand-accent font-black text-[10px] border border-brand-accent/20">
+                              <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-black font-bold text-[10px] border border-brand-border">
                                 {tx.technicianName.charAt(0).toUpperCase()}
                               </div>
-                              <span className="text-stone-300 font-bold text-sm">{tx.technicianName}</span>
+                              <span className="text-slate-600 font-medium text-sm">{tx.technicianName}</span>
                             </div>
                           </td>
-                          <td className="px-8 py-6 text-center">
-                            <span className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-white/5 border border-white/10 text-brand-accent font-black text-sm italic">
+                          <td className="px-8 py-5 text-center">
+                            <span className="inline-flex items-center justify-center px-3 py-1 rounded-lg bg-slate-100 text-slate-900 font-bold text-xs border border-slate-200">
                               {tx.quantity || 1}
                             </span>
                           </td>
-                          <td className="px-8 py-6">
+                          <td className="px-8 py-5">
                             <div className="max-w-xs">
-                              <p className="text-stone-400 text-xs italic line-clamp-2 leading-relaxed">
-                                {tx.notes || <span className="opacity-20">No remarks</span>}
+                              <p className="text-slate-500 text-xs line-clamp-2 leading-relaxed">
+                                {tx.notes || <span className="text-slate-300 italic">No remarks</span>}
                               </p>
                             </div>
                           </td>
@@ -939,22 +1103,22 @@ export default function App() {
       </main>
 
       {/* System Status Bar - Desktop Only */}
-      <div className="hidden lg:flex fixed bottom-0 left-80 right-0 h-10 bg-brand-bg/90 backdrop-blur-md border-t border-white/5 items-center justify-between px-8 z-30">
+      <div className="hidden lg:flex fixed bottom-0 left-24 right-0 h-10 bg-white/80 backdrop-blur-md border-t border-brand-border items-center justify-between px-8 z-30 shadow-sm">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
-            <div className="w-1.5 h-1.5 rounded-full bg-brand-accent animate-pulse"></div>
-            <span className="text-[9px] font-black text-brand-accent uppercase tracking-widest italic">System Operational</span>
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.3)]"></div>
+            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">System Operational</span>
           </div>
-          <div className="h-3 w-[1px] bg-white/10"></div>
+          <div className="h-3 w-[1px] bg-brand-border"></div>
           <div className="flex items-center gap-2">
-            <span className="text-[9px] font-bold text-stone-600 uppercase tracking-widest">Database:</span>
-            <span className="text-[9px] font-black text-stone-400 uppercase tracking-widest">Cloud Firestore</span>
+            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Database:</span>
+            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Cloud Firestore</span>
           </div>
         </div>
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
-            <Clock className="w-3 h-3 text-stone-600" />
-            <span className="text-[9px] font-black text-stone-400 uppercase tracking-widest font-mono">
+            <Clock className="w-3 h-3 text-slate-400" />
+            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest font-mono">
               {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
             </span>
           </div>
@@ -962,34 +1126,34 @@ export default function App() {
       </div>
 
       {/* Bottom Navigation - Mobile Only */}
-      <nav className="lg:hidden fixed bottom-6 left-6 right-6 h-20 bg-brand-bg/80 backdrop-blur-xl border border-white/10 rounded-[2.5rem] flex items-center justify-around px-4 z-40 shadow-2xl">
+      <nav className="lg:hidden fixed bottom-6 left-6 right-6 h-16 bg-white/90 backdrop-blur-xl border border-brand-border rounded-2xl flex items-center justify-around px-4 z-40 shadow-xl">
         <button 
           onClick={() => setView('home')} 
           className={cn(
-            "flex flex-col items-center gap-1 transition-all duration-300 px-6 py-2 rounded-2xl",
-            view === 'home' ? "text-brand-accent bg-brand-accent/10" : "text-stone-600"
+            "flex flex-col items-center gap-1 transition-all duration-300 px-4 py-1.5 rounded-xl",
+            view === 'home' ? "text-black bg-slate-100" : "text-slate-400"
           )}
         >
-          <Box className="w-6 h-6" />
-          <span className="text-[9px] font-black uppercase tracking-widest italic">Home</span>
+          <LayoutDashboard className="w-5 h-5" />
+          <span className="text-[9px] font-bold uppercase tracking-widest">Home</span>
         </button>
         
         <button 
           onClick={() => setView('scan')} 
-          className="w-16 h-16 bg-brand-accent text-brand-bg rounded-2xl flex items-center justify-center -mt-12 shadow-[0_0_30px_rgba(0,240,255,0.4)] active:scale-90 transition-all hover:scale-105"
+          className="w-14 h-14 bg-black text-white rounded-2xl flex items-center justify-center -mt-10 shadow-lg shadow-black/30 active:scale-95 transition-all hover:scale-105"
         >
-          <Scan className="w-8 h-8" />
+          <Scan className="w-7 h-7" />
         </button>
         
         <button 
           onClick={() => setView('history')} 
           className={cn(
-            "flex flex-col items-center gap-1 transition-all duration-300 px-6 py-2 rounded-2xl",
-            view === 'history' ? "text-brand-accent bg-brand-accent/10" : "text-stone-600"
+            "flex flex-col items-center gap-1 transition-all duration-300 px-4 py-1.5 rounded-xl",
+            view === 'history' ? "text-black bg-slate-100" : "text-slate-400"
           )}
         >
-          <History className="w-6 h-6" />
-          <span className="text-[9px] font-black uppercase tracking-widest italic">Logs</span>
+          <History className="w-5 h-5" />
+          <span className="text-[9px] font-bold uppercase tracking-widest">Logs</span>
         </button>
       </nav>
     </div>
