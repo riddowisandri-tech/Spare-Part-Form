@@ -72,18 +72,24 @@ interface Transaction {
 
 const Logo = () => (
   <div className="w-full flex items-center justify-center py-2">
-    <svg viewBox="0 0 240 110" className="w-full h-auto max-h-20 drop-shadow-[0_0_8px_rgba(255,255,255,0.1)]">
-      {/* SIIX Text - White as per reference */}
-      <text x="10" y="75" fontFamily="'Arial Black', 'Arial', sans-serif" fontSize="85" fontWeight="900" fill="white" letterSpacing="-6">
-        siix
-      </text>
-      {/* Light Blue Dot - Above first 'i' */}
-      <circle cx="82" cy="18" r="13" fill="#72B1E1" />
-      {/* Orange Dot - Below second 'i' */}
-      <circle cx="128" cy="95" r="13" fill="#F58220" />
-      {/* We care. Text - White, Italic, Bold */}
-      <text x="145" y="105" fontFamily="Georgia, serif" fontSize="22" fontStyle="italic" fontWeight="bold" fill="white">
-        W e   c a r e .
+    <svg viewBox="0 0 240 150" className="w-full h-auto max-h-24 overflow-visible">
+      {/* 's' */}
+      <text x="10" y="85" fontFamily="'Arial Black', 'Arial', sans-serif" fontSize="90" fontWeight="900" fill="white">s</text>
+      
+      {/* First 'i' */}
+      <rect x="65" y="40" width="18" height="45" fill="white" />
+      <circle cx="74" cy="20" r="14" fill="#72B1E1" />
+      
+      {/* Second 'i' */}
+      <rect x="95" y="40" width="18" height="45" fill="white" />
+      <circle cx="104" cy="105" r="14" fill="#F58220" />
+      
+      {/* 'x' */}
+      <text x="125" y="85" fontFamily="'Arial Black', 'Arial', sans-serif" fontSize="90" fontWeight="900" fill="white">x</text>
+      
+      {/* "We care." - Full tagline with proper spacing and visibility */}
+      <text x="65" y="130" fontFamily="Georgia, serif" fontSize="28" fontStyle="italic" fontWeight="bold" fill="white">
+        We care.
       </text>
     </svg>
   </div>
@@ -352,17 +358,19 @@ export default function App() {
   return (
     <div className="min-h-screen bg-brand-bg text-slate-300 font-sans flex">
       {/* Sidebar - Desktop */}
-      <aside className="hidden lg:flex w-28 flex-col bg-black sticky top-0 h-screen py-8 items-center">
-        <div className="flex flex-col items-center gap-12 w-full px-4">
-          <Logo />
+      <aside className="hidden lg:flex w-28 flex-col bg-black sticky top-0 h-screen py-8 overflow-visible z-20">
+        <div className="flex flex-col items-center gap-12 w-full overflow-visible">
+          <div className="w-full px-4">
+            <Logo />
+          </div>
           
-          <nav className="w-full flex flex-col items-center gap-4">
+          <nav className="w-full flex flex-col items-end overflow-visible">
             <button 
               onClick={() => setView('home')}
               className={cn("sidebar-item", view === 'home' && "active")}
               title="Dashboard"
             >
-              <LayoutDashboard className="w-6 h-6" />
+              <LayoutDashboard className="w-6 h-6 relative z-10" />
             </button>
             
             <button 
@@ -370,7 +378,7 @@ export default function App() {
               className={cn("sidebar-item", view === 'scan' && "active")}
               title="Scan Barcode"
             >
-              <Scan className="w-6 h-6" />
+              <Scan className="w-6 h-6 relative z-10" />
             </button>
             
             <button 
@@ -378,7 +386,7 @@ export default function App() {
               className={cn("sidebar-item", view === 'history' && "active")}
               title="Transaction History"
             >
-              <History className="w-6 h-6" />
+              <History className="w-6 h-6 relative z-10" />
             </button>
 
             <button 
@@ -386,7 +394,7 @@ export default function App() {
               className="sidebar-item"
               title="Settings"
             >
-              <Settings className="w-6 h-6" />
+              <Settings className="w-6 h-6 relative z-10" />
             </button>
           </nav>
         </div>

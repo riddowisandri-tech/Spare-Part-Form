@@ -36,12 +36,14 @@
   content: '';
   @apply absolute -top-8 right-0 w-8 h-8 bg-brand-bg;
   mask-image: radial-gradient(circle at 0 0, transparent 32px, black 33px);
+  -webkit-mask-image: radial-gradient(circle at 0 0, transparent 32px, black 33px);
 }
 
 .sidebar-item.active::after {
   content: '';
   @apply absolute -bottom-8 right-0 w-8 h-8 bg-brand-bg;
   mask-image: radial-gradient(circle at 0 32px, transparent 32px, black 33px);
+  -webkit-mask-image: radial-gradient(circle at 0 32px, transparent 32px, black 33px);
 }
 
 .glass-panel {
