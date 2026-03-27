@@ -15,7 +15,7 @@ import {
   updateDoc
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { Html5QrcodeScanner } from 'html5-qrcode';
+import { Html5QrcodeScanner, Html5Qrcode } from 'html5-qrcode';
 import * as XLSX from 'xlsx';
 import { 
   Scan, 
@@ -1289,28 +1289,68 @@ export default function App() {
 
 // --- Scanner Component ---
 function Scanner({ onScanSuccess }: { onScanSuccess: (text: string) => void }) {
-  const scannerRef = useRef<Html5QrcodeScanner | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
 
   useEffect(() => {
-    scannerRef.current = new Html5QrcodeScanner(
-      "reader",
-      { 
-        fps: 20, 
-        qrbox: { width: 280, height: 280 },
-        aspectRatio: 1.0,
-        showTorchButtonIfSupported: true
-      },
-      /* verbose= */ false
-    );
+    const html5QrCode = new Html5Qrcode("reader");
+    html5QrCodeRef.current = html5QrCode;
 
-    scannerRef.current.render(onScanSuccess, (error) => {});
+    const startScanner = async () => {
+      try {
+        // On mobile, "environment" is the back camera
+        await html5QrCode.start(
+          { facingMode: "environment" },
+          {
+            fps: 10,
+            qrbox: { width: 250, height: 250 },
+          },
+          (decodedText) => {
+            onScanSuccess(decodedText);
+          },
+          () => {
+            // Ignore scanning errors
+          }
+        );
+      } catch (err) {
+        console.error("Failed to start scanner:", err);
+        setError("Camera access failed. Please ensure you have granted camera permissions and are using a secure connection (HTTPS).");
+      }
+    };
+
+    // Small delay to ensure DOM is ready and animations are finished
+    const timer = setTimeout(startScanner, 500);
 
     return () => {
-      if (scannerRef.current) {
-        scannerRef.current.clear().catch(err => console.error("Failed to clear scanner", err));
+      clearTimeout(timer);
+      if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
+        html5QrCodeRef.current.stop().catch(err => console.error("Failed to stop scanner", err));
       }
     };
   }, [onScanSuccess]);
 
-  return <div id="reader" className="w-full h-full"></div>;
+  return (
+    <div className="w-full h-full relative bg-black flex items-center justify-center">
+      <div id="reader" className="w-full h-full"></div>
+      {error && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center p-8 bg-slate-900/90 backdrop-blur-md text-center">
+          <div className="max-w-xs space-y-6">
+            <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto">
+              <AlertCircle className="w-8 h-8 text-red-500" />
+            </div>
+            <div className="space-y-2">
+              <h4 className="text-white font-bold uppercase tracking-widest text-xs">Camera Error</h4>
+              <p className="text-slate-400 text-sm leading-relaxed">{error}</p>
+            </div>
+            <button 
+              onClick={() => window.location.reload()}
+              className="w-full py-4 bg-white text-black rounded-2xl font-bold text-sm hover:bg-slate-100 transition-colors shadow-lg"
+            >
+              Refresh Page
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
