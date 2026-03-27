@@ -935,19 +935,7 @@ export default function App() {
                       <div className="absolute -top-1 -right-1 w-8 h-8 border-t-4 border-r-4 border-black rounded-tr-lg"></div>
                       <div className="absolute -bottom-1 -left-1 w-8 h-8 border-b-4 border-l-4 border-black rounded-bl-lg"></div>
                       <div className="absolute -bottom-1 -right-1 w-8 h-8 border-b-4 border-r-4 border-black rounded-br-lg"></div>
-                      
-                      {/* Scanning Line */}
-                      <motion.div 
-                        animate={{ top: ['0%', '100%'] }}
-                        transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                        className="absolute left-0 right-0 h-1 bg-black shadow-[0_0_20px_rgba(0,0,0,0.2)]"
-                      />
                     </div>
-                  </div>
-
-                  <div className="absolute bottom-8 left-1/2 -translate-x-1/2 px-6 py-3 bg-white/90 backdrop-blur-md rounded-full border border-brand-border flex items-center gap-3 shadow-lg">
-                    <div className="w-2 h-2 rounded-full bg-black animate-pulse shadow-[0_0_10px_rgba(0,0,0,0.1)]"></div>
-                    <span className="text-xs font-bold text-slate-900 uppercase tracking-widest">System Ready: Align Barcode</span>
                   </div>
                 </div>
 
@@ -1302,8 +1290,16 @@ function Scanner({ onScanSuccess }: { onScanSuccess: (text: string) => void }) {
         await html5QrCode.start(
           { facingMode: "environment" },
           {
-            fps: 10,
-            qrbox: { width: 250, height: 250 },
+            fps: 20,
+            qrbox: (viewfinderWidth, viewfinderHeight) => {
+              const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+              const qrboxSize = Math.floor(minEdge * 0.7);
+              return {
+                width: qrboxSize,
+                height: qrboxSize
+              };
+            },
+            aspectRatio: 1.0,
           },
           (decodedText) => {
             onScanSuccess(decodedText);
