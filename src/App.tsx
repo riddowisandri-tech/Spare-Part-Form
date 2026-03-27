@@ -659,20 +659,17 @@ export default function App() {
               {/* Left Column: Hero, Trending, Analytics */}
               <div className="lg:col-span-8 space-y-8">
                 {/* Hero Section */}
-                <div className="bg-white rounded-[40px] p-10 flex flex-col md:flex-row items-center justify-between relative overflow-hidden shadow-sm">
-                  <div className="relative z-10 max-w-md">
-                    <h2 className="text-5xl font-serif font-black tracking-tighter bg-gradient-to-r from-slate-900 to-slate-500 bg-clip-text text-transparent mb-4">Hi Engineering Team.</h2>
-                    <p className="text-slate-500 text-sm leading-relaxed mb-8">
+                <div className="bg-white rounded-[40px] p-12 relative overflow-hidden shadow-sm border border-brand-border">
+                  <div className="relative z-10">
+                    <h2 className="text-5xl md:text-6xl font-serif font-black tracking-tighter bg-gradient-to-r from-slate-900 to-slate-500 bg-clip-text text-transparent mb-6 pb-2">Hi Engineering Team.</h2>
+                    <p className="text-slate-500 text-lg leading-relaxed max-w-2xl">
                       Please complete this spare parts form whenever you take any spare parts. Thank you for your cooperation.
                     </p>
                   </div>
-                  <div className="relative mt-8 md:mt-0">
-                    <img 
-                      src="https://img.freepik.com/free-vector/flat-design-character-working-from-home_23-2148856693.jpg" 
-                      alt="Illustration" 
-                      className="w-64 h-auto rounded-3xl"
-                      referrerPolicy="no-referrer"
-                    />
+                  {/* Subtle background accent */}
+                  <div className="absolute -bottom-24 -right-24 w-80 h-80 bg-slate-50 rounded-full blur-3xl opacity-60"></div>
+                  <div className="absolute top-12 right-12 opacity-[0.03]">
+                    <Box className="w-64 h-64 rotate-12" />
                   </div>
                 </div>
 
@@ -680,32 +677,30 @@ export default function App() {
                 <div className="space-y-6">
                   <div className="flex items-center justify-between">
                     <h3 className="text-3xl font-serif font-black tracking-tight bg-gradient-to-r from-slate-900 to-slate-500 bg-clip-text text-transparent">Recent Activity</h3>
+                    <button onClick={() => setView('history')} className="text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-black transition-colors">View All Logs</button>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {transactions.slice(0, 3).map((tx, i) => (
-                      <div key={tx.id} className={cn("rounded-[32px] p-6 shadow-sm flex flex-col justify-between min-h-[220px]", i === 1 ? "bg-black text-white" : "bg-white")}>
+                      <div key={tx.id} className="bg-white rounded-[32px] p-6 shadow-sm border border-brand-border flex flex-col justify-between min-h-[200px] hover:shadow-md transition-all group">
                         <div>
                           <div className="flex items-center justify-between mb-4">
-                            <h4 className="font-bold truncate pr-2">{tx.partBarcode}</h4>
-                            <div className="px-2 py-1 rounded-lg bg-brand-bg/10 text-[10px] font-bold uppercase tracking-wider">
-                              {tx.type === 'in' ? 'Stock In' : 'Stock Out'}
+                            <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", tx.type === 'in' ? "bg-emerald-50" : "bg-orange-50")}>
+                              {tx.type === 'in' ? <ArrowRightLeft className="w-5 h-5 text-emerald-500" /> : <ArrowRightLeft className="w-5 h-5 text-orange-500 rotate-180" />}
                             </div>
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                              {tx.timestamp?.toDate().toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                            </span>
                           </div>
-                          <p className={cn("text-xs leading-relaxed opacity-70 font-medium", i === 1 ? 'text-white' : 'text-slate-500')}>
-                            Technician: {tx.technicianName}
-                          </p>
-                          <p className={cn("text-[10px] mt-2 font-bold uppercase tracking-widest opacity-50", i === 1 ? 'text-white' : 'text-slate-400')}>
-                            {tx.timestamp?.toDate().toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
-                          </p>
+                          <h4 className="font-bold text-slate-900 truncate mb-1">{tx.partBarcode}</h4>
+                          <p className="text-xs text-slate-500 font-medium">By {tx.technicianName}</p>
                         </div>
                         <div className="flex items-center justify-between mt-6">
-                          <div className="flex items-center gap-2">
-                            <span className="text-2xl font-bold tracking-tight">{tx.quantity || 1}</span>
-                            <span className="text-[10px] font-bold uppercase tracking-widest opacity-50">Units</span>
+                          <div className="flex items-center gap-1">
+                            <span className="text-2xl font-black tracking-tighter text-slate-900">{tx.quantity || 1}</span>
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Units</span>
                           </div>
-                          <div className="flex items-center gap-1 opacity-70">
-                            <History className="w-3 h-3" />
-                            <span className="text-[10px] font-bold">Logged</span>
+                          <div className={cn("px-2 py-1 rounded-lg text-[8px] font-bold uppercase tracking-widest", tx.type === 'in' ? "bg-emerald-100 text-emerald-600" : "bg-orange-100 text-orange-600")}>
+                            {tx.type === 'in' ? 'In' : 'Out'}
                           </div>
                         </div>
                       </div>
@@ -782,23 +777,20 @@ export default function App() {
                 </div>
 
                 {/* Stats Cards */}
-                <div className="bg-white rounded-[40px] p-8 space-y-4 shadow-sm">
+                <div className="grid grid-cols-2 gap-4">
                   {[
-                    { label: 'Total Inventory', value: stats.totalParts, icon: <Box className="w-5 h-5" />, color: 'bg-slate-50' },
-                    { label: 'Today Transactions', value: stats.todayTxs, icon: <ArrowRightLeft className="w-5 h-5" />, color: 'bg-slate-50' },
-                    { label: 'Total Logs', value: transactions.length, icon: <History className="w-5 h-5" />, color: 'bg-slate-50' }
+                    { label: 'Inventory', value: stats.totalParts, icon: <Box className="w-5 h-5" />, color: 'bg-slate-50' },
+                    { label: 'Today', value: stats.todayTxs, icon: <ArrowRightLeft className="w-5 h-5" />, color: 'bg-slate-50' },
+                    { label: 'Total Logs', value: transactions.length, icon: <History className="w-5 h-5" />, color: 'bg-slate-50', span: 'col-span-2' }
                   ].map((stat, i) => (
-                    <div key={i} className="flex items-center justify-between p-4 rounded-3xl hover:bg-slate-50 transition-all group cursor-default">
-                      <div className="flex items-center gap-4">
-                        <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center", stat.color)}>
+                    <div key={i} className={cn("bg-white rounded-[32px] p-6 shadow-sm border border-brand-border hover:bg-slate-50 transition-all group", stat.span)}>
+                      <div className="flex items-center gap-4 mb-4">
+                        <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", stat.color)}>
                           {stat.icon}
                         </div>
-                        <div>
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{stat.label}</p>
-                          <p className="text-xl font-bold text-slate-900">{stat.value}</p>
-                        </div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{stat.label}</p>
                       </div>
-                      <ChevronLeft className="w-5 h-5 text-slate-300 rotate-180 group-hover:text-black transition-colors" />
+                      <p className="text-3xl font-black tracking-tighter text-slate-900">{stat.value}</p>
                     </div>
                   ))}
                 </div>
@@ -1099,7 +1091,7 @@ export default function App() {
       </main>
 
       {/* System Status Bar - Desktop Only */}
-      <div className="hidden lg:flex fixed bottom-0 left-24 right-0 h-10 bg-white/80 backdrop-blur-md border-t border-brand-border items-center justify-between px-8 z-30 shadow-sm">
+      <div className="hidden lg:flex fixed bottom-0 left-28 right-0 h-10 bg-white/80 backdrop-blur-md border-t border-brand-border items-center justify-between px-8 z-30 shadow-sm">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.3)]"></div>
