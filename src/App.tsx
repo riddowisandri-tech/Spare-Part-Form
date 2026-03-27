@@ -70,30 +70,42 @@ interface Transaction {
 
 // --- Components ---
 
-const Logo = () => (
-  <div className="w-full flex items-center justify-center py-2">
-    <svg viewBox="0 0 240 150" className="w-full h-auto max-h-24 overflow-visible">
-      {/* 's' */}
-      <text x="10" y="85" fontFamily="'Arial Black', 'Arial', sans-serif" fontSize="90" fontWeight="900" fill="white">s</text>
-      
-      {/* First 'i' */}
-      <rect x="65" y="40" width="18" height="45" fill="white" />
-      <circle cx="74" cy="20" r="14" fill="#72B1E1" />
-      
-      {/* Second 'i' */}
-      <rect x="95" y="40" width="18" height="45" fill="white" />
-      <circle cx="104" cy="105" r="14" fill="#F58220" />
-      
-      {/* 'x' */}
-      <text x="125" y="85" fontFamily="'Arial Black', 'Arial', sans-serif" fontSize="90" fontWeight="900" fill="white">x</text>
-      
-      {/* "We care." - Full tagline with proper spacing and visibility */}
-      <text x="65" y="130" fontFamily="Georgia, serif" fontSize="28" fontStyle="italic" fontWeight="bold" fill="white">
-        We care.
-      </text>
-    </svg>
-  </div>
-);
+const Logo = ({ dark = false }: { dark?: boolean }) => {
+  const gradientId = dark ? "siixGradientDark" : "siixGradientLight";
+  return (
+    <div className="w-full flex items-center justify-center py-2">
+      <svg viewBox="0 0 240 150" className="w-full h-auto max-h-24 overflow-visible drop-shadow-lg">
+        <defs>
+          <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor={dark ? "#1e293b" : "#FFFFFF"} />
+            <stop offset="50%" stopColor="#72B1E1" />
+            <stop offset="100%" stopColor="#F58220" />
+            <animate attributeName="x1" values="0%;100%;0%" dur="6s" repeatCount="indefinite" />
+            <animate attributeName="x2" values="100%;0%;100%" dur="6s" repeatCount="indefinite" />
+          </linearGradient>
+        </defs>
+        {/* 's' */}
+        <text x="10" y="85" fontFamily="'Arial Black', 'Arial', sans-serif" fontSize="90" fontWeight="900" fill={`url(#${gradientId})`}>s</text>
+        
+        {/* First 'i' */}
+        <rect x="65" y="40" width="18" height="45" fill="white" stroke={dark ? "#e2e8f0" : "none"} strokeWidth="1" />
+        <circle cx="74" cy="20" r="14" fill="#72B1E1" />
+        
+        {/* Second 'i' */}
+        <rect x="95" y="40" width="18" height="45" fill="white" stroke={dark ? "#e2e8f0" : "none"} strokeWidth="1" />
+        <circle cx="104" cy="105" r="14" fill="#F58220" />
+        
+        {/* 'x' */}
+        <text x="125" y="85" fontFamily="'Arial Black', 'Arial', sans-serif" fontSize="90" fontWeight="900" fill={`url(#${gradientId})`}>x</text>
+        
+        {/* "We care." - Full tagline with proper spacing and visibility */}
+        <text x="110" y="130" fontFamily="'Libre Baskerville', serif" fontSize="28" fontStyle="italic" fontWeight="bold" fill={dark ? "#475569" : "white"}>
+          We care.
+        </text>
+      </svg>
+    </div>
+  );
+};
 
 export default function App() {
   const [view, setView] = useState<'home' | 'scan' | 'form' | 'history'>('home');
@@ -360,7 +372,7 @@ export default function App() {
       {/* Sidebar - Desktop */}
       <aside className="hidden lg:flex w-28 flex-col bg-black sticky top-0 h-screen py-8 overflow-visible z-20">
         <div className="flex flex-col items-center gap-12 w-full overflow-visible">
-          <div className="w-full px-4">
+          <div className="w-full px-2 transition-transform duration-500 hover:scale-110">
             <Logo />
           </div>
           
@@ -402,14 +414,14 @@ export default function App() {
 
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <header className="px-8 py-6 flex items-center justify-between">
-          <div className="lg:hidden">
-            <div className="w-24">
-              <Logo />
-            </div>
+        <header className="px-6 py-6 flex flex-col md:flex-row items-center md:justify-between gap-4">
+          <div className="lg:hidden w-32 md:w-40">
+            <Logo dark={true} />
           </div>
-          <div className="hidden lg:block">
-            <h1 className="text-sm font-bold text-slate-400 uppercase tracking-[0.2em]">Spare Parts Form System</h1>
+          <div className="text-center md:text-left">
+            <h1 className="text-3xl md:text-4xl lg:text-5xl font-serif font-black tracking-tighter bg-gradient-to-r from-slate-900 to-slate-500 bg-clip-text text-transparent drop-shadow-2xl leading-tight">
+              Spare Parts Form System
+            </h1>
           </div>
         </header>
 
@@ -565,7 +577,7 @@ export default function App() {
                       <CheckCircle2 className="w-6 h-6 text-brand-accent" />
                     </div>
                     <div>
-                      <h3 className="text-xl font-bold text-slate-900">Confirm Transaction</h3>
+                      <h3 className="text-2xl font-serif font-black tracking-tight bg-gradient-to-r from-slate-900 to-slate-500 bg-clip-text text-transparent">Confirm Transaction</h3>
                       <p className="text-xs text-slate-500 font-medium">Please review the details below</p>
                     </div>
                   </div>
@@ -649,7 +661,7 @@ export default function App() {
                 {/* Hero Section */}
                 <div className="bg-white rounded-[40px] p-10 flex flex-col md:flex-row items-center justify-between relative overflow-hidden shadow-sm">
                   <div className="relative z-10 max-w-md">
-                    <h2 className="text-4xl font-bold text-slate-900 mb-4 tracking-tight">Hi Engineering Team.</h2>
+                    <h2 className="text-5xl font-serif font-black tracking-tighter bg-gradient-to-r from-slate-900 to-slate-500 bg-clip-text text-transparent mb-4">Hi Engineering Team.</h2>
                     <p className="text-slate-500 text-sm leading-relaxed mb-8">
                       Please complete this spare parts form whenever you take any spare parts. Thank you for your cooperation.
                     </p>
@@ -664,41 +676,43 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Trending Section -> Recent Parts */}
+                {/* Recent Activity Section (Transactions) */}
                 <div className="space-y-6">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-xl font-bold text-slate-900">Recent Parts</h3>
+                    <h3 className="text-3xl font-serif font-black tracking-tight bg-gradient-to-r from-slate-900 to-slate-500 bg-clip-text text-transparent">Recent Activity</h3>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {parts.slice(0, 3).map((part, i) => (
-                      <div key={part.id} className={cn("rounded-[32px] p-6 shadow-sm flex flex-col justify-between min-h-[220px]", i === 1 ? "bg-black text-white" : "bg-white")}>
+                    {transactions.slice(0, 3).map((tx, i) => (
+                      <div key={tx.id} className={cn("rounded-[32px] p-6 shadow-sm flex flex-col justify-between min-h-[220px]", i === 1 ? "bg-black text-white" : "bg-white")}>
                         <div>
                           <div className="flex items-center justify-between mb-4">
-                            <h4 className="font-bold truncate pr-2">{part.name}</h4>
-                            <div className={cn("w-2 h-2 rounded-full", part.stock < 10 ? "bg-red-500" : "bg-green-500")}></div>
+                            <h4 className="font-bold truncate pr-2">{tx.partBarcode}</h4>
+                            <div className="px-2 py-1 rounded-lg bg-brand-bg/10 text-[10px] font-bold uppercase tracking-wider">
+                              {tx.type === 'in' ? 'Stock In' : 'Stock Out'}
+                            </div>
                           </div>
-                          <p className={cn("text-xs leading-relaxed opacity-70 font-mono", i === 1 ? 'text-white' : 'text-slate-500')}>
-                            {part.barcode}
+                          <p className={cn("text-xs leading-relaxed opacity-70 font-medium", i === 1 ? 'text-white' : 'text-slate-500')}>
+                            Technician: {tx.technicianName}
                           </p>
                           <p className={cn("text-[10px] mt-2 font-bold uppercase tracking-widest opacity-50", i === 1 ? 'text-white' : 'text-slate-400')}>
-                            Location: {part.location || 'N/A'}
+                            {tx.timestamp?.toDate().toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
                           </p>
                         </div>
                         <div className="flex items-center justify-between mt-6">
                           <div className="flex items-center gap-2">
-                            <span className="text-2xl font-bold tracking-tight">{part.stock}</span>
+                            <span className="text-2xl font-bold tracking-tight">{tx.quantity || 1}</span>
                             <span className="text-[10px] font-bold uppercase tracking-widest opacity-50">Units</span>
                           </div>
                           <div className="flex items-center gap-1 opacity-70">
-                            <TrendingUp className="w-3 h-3" />
-                            <span className="text-[10px] font-bold">Active</span>
+                            <History className="w-3 h-3" />
+                            <span className="text-[10px] font-bold">Logged</span>
                           </div>
                         </div>
                       </div>
                     ))}
-                    {parts.length === 0 && (
+                    {transactions.length === 0 && (
                       <div className="col-span-3 py-12 text-center bg-white rounded-[32px] border border-dashed border-slate-200 text-slate-400 text-sm italic">
-                        No parts registered yet.
+                        No recent activity recorded.
                       </div>
                     )}
                   </div>
@@ -707,7 +721,7 @@ export default function App() {
                 {/* Analytics Section -> Transaction Activity */}
                 <div className="bg-white rounded-[40px] p-10 shadow-sm">
                   <div className="flex items-center justify-between mb-10">
-                    <h3 className="text-2xl font-bold text-slate-900">Inventory Activity</h3>
+                    <h3 className="text-3xl font-serif font-black tracking-tight bg-gradient-to-r from-slate-900 to-slate-500 bg-clip-text text-transparent">Inventory Activity</h3>
                   </div>
                   <div className="h-48 w-full relative">
                     <svg viewBox="0 0 800 200" className="w-full h-full overflow-visible">
@@ -747,8 +761,26 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Right Column: Stats, Recent Activity, CTA */}
+              {/* Right Column: CTA, Stats */}
               <div className="lg:col-span-4 space-y-8">
+                {/* CTA Card -> Quick Scan */}
+                <div className="bg-white rounded-[40px] p-10 shadow-sm text-center relative overflow-hidden group">
+                  <div className="absolute top-0 left-1/2 -translate-x-1/2 opacity-5 group-hover:scale-110 transition-transform duration-500">
+                    <Scan className="w-32 h-32" />
+                  </div>
+                  <div className="relative z-10">
+                    <p className="text-slate-500 text-sm mb-6 px-4">
+                      Ready to update stock? <span className="font-bold text-slate-900">Quick Scan</span> to record transactions.
+                    </p>
+                    <button 
+                      onClick={() => setView('scan')}
+                      className="w-full py-4 bg-black text-white rounded-2xl font-bold text-sm hover:bg-slate-800 transition-all shadow-xl shadow-black/10"
+                    >
+                      Open Scanner
+                    </button>
+                  </div>
+                </div>
+
                 {/* Stats Cards */}
                 <div className="bg-white rounded-[40px] p-8 space-y-4 shadow-sm">
                   {[
@@ -770,50 +802,6 @@ export default function App() {
                     </div>
                   ))}
                 </div>
-
-                {/* Recent Activity Section */}
-                <div className="bg-white rounded-[40px] p-8 shadow-sm">
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-lg font-bold text-slate-900">Recent Activity</h3>
-                  </div>
-                  <div className="space-y-6">
-                    {transactions.slice(0, 4).map((tx, i) => (
-                      <div key={tx.id} className="flex items-center gap-4 group">
-                        <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center shrink-0 group-hover:bg-black group-hover:text-white transition-all">
-                          <History className="w-4 h-4" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-slate-900 truncate">{tx.partBarcode}</p>
-                          <p className="text-[10px] text-slate-400 font-medium">{tx.technicianName} • {tx.timestamp?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-xs font-bold text-slate-900">+{tx.quantity || 1}</p>
-                        </div>
-                      </div>
-                    ))}
-                    {transactions.length === 0 && (
-                      <p className="text-center text-slate-400 text-xs italic py-4">No activity today</p>
-                    )}
-                  </div>
-                </div>
-
-                {/* CTA Card -> Quick Scan */}
-                <div className="bg-white rounded-[40px] p-10 shadow-sm text-center relative overflow-hidden group">
-                  <div className="absolute top-0 left-1/2 -translate-x-1/2 opacity-5 group-hover:scale-110 transition-transform duration-500">
-                    <Scan className="w-32 h-32" />
-                  </div>
-                  <div className="relative z-10">
-                    <p className="text-slate-500 text-sm mb-6 px-4">
-                      Ready to update stock? <span className="font-bold text-slate-900">Quick Scan</span> to record transactions.
-                    </p>
-                    <button 
-                      onClick={() => setView('scan')}
-                      className="w-full py-4 bg-black text-white rounded-2xl font-bold text-sm hover:bg-slate-800 transition-all shadow-xl shadow-black/10"
-                    >
-                      Open Scanner
-                    </button>
-                  </div>
-                </div>
               </div>
             </motion.div>
           )}
@@ -833,7 +821,7 @@ export default function App() {
                   </div>
                   <span className="font-bold uppercase tracking-widest text-[10px]">Back to Dashboard</span>
                 </button>
-                <h2 className="text-2xl font-bold text-slate-900">Scanner <span className="text-slate-400">Active</span></h2>
+                <h2 className="text-3xl font-serif font-black tracking-tight bg-gradient-to-r from-slate-900 to-slate-500 bg-clip-text text-transparent">Scanner <span className="text-slate-400">Active</span></h2>
               </div>
 
               <div className="bg-white rounded-3xl p-10 space-y-10 shadow-sm border border-brand-border">
@@ -914,7 +902,7 @@ export default function App() {
                   <span className="font-bold uppercase tracking-widest text-[10px]">Back to Scan</span>
                 </button>
                 <div className="text-right">
-                  <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Record Transaction</h2>
+                  <h2 className="text-3xl font-serif font-black tracking-tight bg-gradient-to-r from-slate-900 to-slate-500 bg-clip-text text-transparent">Record Transaction</h2>
                   <p className="text-xs text-slate-400 font-medium mt-1">Update inventory stock levels in real-time</p>
                 </div>
               </div>
@@ -923,7 +911,7 @@ export default function App() {
                 {/* Left Side: Part Info (Black) */}
                 <div className="md:w-2/5 bg-black p-10 text-white flex flex-col justify-between relative overflow-hidden">
                   <div className="relative z-10">
-                    <h3 className="text-2xl font-bold mb-4">Part Information</h3>
+                    <h3 className="text-2xl font-serif font-black tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent mb-4">Part Information</h3>
                     <p className="text-white/70 text-sm leading-relaxed mb-10">
                       Review the scanned part details before recording the transaction. Ensure all data is accurate.
                     </p>
@@ -1049,7 +1037,7 @@ export default function App() {
                   </div>
                   <span className="font-bold uppercase tracking-wider text-[10px]">Back to Dashboard</span>
                 </button>
-                <h2 className="text-2xl font-bold text-slate-900">Transaction History</h2>
+                <h2 className="text-3xl font-serif font-black tracking-tight bg-gradient-to-r from-slate-900 to-slate-500 bg-clip-text text-transparent">Transaction History</h2>
               </div>
 
               <div className="bg-white rounded-3xl border border-brand-border shadow-sm overflow-hidden">
