@@ -779,7 +779,7 @@ export default function App() {
                 {/* Stats Cards */}
                 <div className="grid grid-cols-2 gap-4">
                   {[
-                    { label: 'Inventory', value: stats.totalParts, icon: <Box className="w-5 h-5" />, color: 'bg-slate-50' },
+                    { label: 'Registered Part', value: stats.totalParts, icon: <Box className="w-5 h-5" />, color: 'bg-slate-50' },
                     { label: 'Today', value: stats.todayTxs, icon: <ArrowRightLeft className="w-5 h-5" />, color: 'bg-slate-50' },
                     { label: 'Total Logs', value: transactions.length, icon: <History className="w-5 h-5" />, color: 'bg-slate-50', span: 'col-span-2' }
                   ].map((stat, i) => (
