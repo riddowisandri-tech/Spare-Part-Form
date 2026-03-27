@@ -36,6 +36,7 @@ import {
   X,
   Camera,
   Zap,
+  Cpu,
   LayoutDashboard
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
@@ -129,6 +130,9 @@ export default function App() {
     quantity: number;
     notes: string;
     isNewPart: boolean;
+    location?: string;
+    model?: string;
+    vendor?: string;
   } | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -309,6 +313,9 @@ export default function App() {
     const quantity = parseInt(formData.get('quantity') as string) || 1;
     const notes = formData.get('notes') as string;
     const partName = (formData.get('name') as string || currentPart?.name || scannedBarcode) as string;
+    const location = formData.get('location') as string || currentPart?.location || '';
+    const model = formData.get('model') as string || currentPart?.model || '';
+    const vendor = formData.get('vendor') as string || currentPart?.vendor || '';
 
     if (!technicianName) {
       setMessage({ type: 'error', text: "Please enter your name." });
@@ -321,7 +328,10 @@ export default function App() {
       technicianName,
       quantity,
       notes,
-      isNewPart: !currentPart
+      isNewPart: !currentPart,
+      location,
+      model,
+      vendor
     });
   };
 
@@ -329,7 +339,7 @@ export default function App() {
     if (!pendingTransaction) return;
     
     setIsSubmitting(true);
-    const { barcode, partName, technicianName, quantity, notes, isNewPart } = pendingTransaction;
+    const { barcode, partName, technicianName, quantity, notes, isNewPart, location, model, vendor } = pendingTransaction;
 
     try {
       const partRef = doc(db, 'spareparts', barcode);
@@ -337,6 +347,9 @@ export default function App() {
         await setDoc(partRef, {
           barcode,
           name: partName,
+          location: location || '',
+          model: model || '',
+          vendor: vendor || '',
           description: '',
           stock: 0
         });
@@ -573,6 +586,38 @@ export default function App() {
                   </div>
                 </div>
                 <p className="mt-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest animate-pulse">Please do not close this window</p>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {isClearing && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[70] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md"
+            >
+              <motion.div 
+                initial={{ scale: 0.9, y: 20 }}
+                animate={{ scale: 1, y: 0 }}
+                className="w-full max-w-sm bg-white rounded-[40px] p-10 shadow-2xl text-center border border-brand-border"
+              >
+                <div className="relative w-24 h-24 mx-auto mb-8 flex items-center justify-center">
+                  <div className="absolute inset-0 border-4 border-slate-100 rounded-full"></div>
+                  <Loader2 className="w-10 h-10 animate-spin text-black" />
+                </div>
+                
+                <h3 className="text-2xl font-serif font-black tracking-tight text-slate-900 mb-2">Clearing Data...</h3>
+                <p className="text-slate-500 text-sm mb-6">Wiping records from database</p>
+                
+                <div className="bg-slate-50 rounded-2xl p-4 border border-brand-border flex items-center justify-center gap-3">
+                  <div className="w-2 h-2 rounded-full bg-black animate-bounce [animation-delay:-0.3s]"></div>
+                  <div className="w-2 h-2 rounded-full bg-black animate-bounce [animation-delay:-0.15s]"></div>
+                  <div className="w-2 h-2 rounded-full bg-black animate-bounce"></div>
+                </div>
+                <p className="mt-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest animate-pulse">Please wait a moment</p>
               </motion.div>
             </motion.div>
           )}
@@ -970,7 +1015,7 @@ export default function App() {
                       Review the scanned part details before recording the transaction. Ensure all data is accurate.
                     </p>
 
-                    <div className="space-y-8">
+                    <div className="space-y-10">
                       <div className="flex items-start gap-4">
                         <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center shrink-0">
                           <Scan className="w-5 h-5" />
@@ -978,16 +1023,6 @@ export default function App() {
                         <div>
                           <p className="text-[10px] font-bold uppercase tracking-widest text-white/50 mb-1">Barcode ID</p>
                           <p className="text-xl font-mono font-bold tracking-tight">{scannedBarcode}</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-start gap-4">
-                        <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center shrink-0">
-                          <Package className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-white/50 mb-1">Current Stock</p>
-                          <p className="text-xl font-bold tracking-tight">{currentPart?.stock || 0} Units</p>
                         </div>
                       </div>
 
@@ -999,6 +1034,18 @@ export default function App() {
                           <div>
                             <p className="text-[10px] font-bold uppercase tracking-widest text-white/50 mb-1">Location</p>
                             <p className="text-xl font-bold tracking-tight">{currentPart.location}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {currentPart?.model && (
+                        <div className="flex items-start gap-4">
+                          <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center shrink-0">
+                            <Cpu className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-white/50 mb-1">Model / Machine</p>
+                            <p className="text-xl font-bold tracking-tight">{currentPart.model}</p>
                           </div>
                         </div>
                       )}
@@ -1022,11 +1069,40 @@ export default function App() {
                         <input 
                           name="name"
                           required
-                          placeholder="John Trangely"
+                          placeholder="Enter part name"
                           className="input-field w-full text-xl"
                         />
                       )}
                     </div>
+
+                    {!currentPart && (
+                      <>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Location</label>
+                          <input 
+                            name="location"
+                            placeholder="Storage location"
+                            className="input-field w-full"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Model / Machine</label>
+                          <input 
+                            name="model"
+                            placeholder="Machine model"
+                            className="input-field w-full"
+                          />
+                        </div>
+                        <div className="space-y-2 md:col-span-2">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Vendor</label>
+                          <input 
+                            name="vendor"
+                            placeholder="Supplier name"
+                            className="input-field w-full"
+                          />
+                        </div>
+                      </>
+                    )}
 
                     <div className="space-y-2">
                       <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Technician Name</label>
