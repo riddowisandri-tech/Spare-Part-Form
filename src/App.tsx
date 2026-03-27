@@ -119,6 +119,8 @@ export default function App() {
   const [stats, setStats] = useState({ totalParts: 0, todayTxs: 0 });
   const [showSettings, setShowSettings] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState({ current: 0, total: 0 });
   const [confirmAction, setConfirmAction] = useState<{ type: 'history' | 'parts', title: string, message: string } | null>(null);
   const [pendingTransaction, setPendingTransaction] = useState<{
     barcode: string;
@@ -213,7 +215,8 @@ export default function App() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setIsClearing(true);
+    setIsImporting(true);
+    setImportProgress({ current: 0, total: 0 });
     try {
       const reader = new FileReader();
       reader.onload = async (evt) => {
@@ -223,54 +226,55 @@ export default function App() {
         const ws = wb.Sheets[wsname];
         const data = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
 
-        // Skip header row (index 0 is title, index 1 is headers)
-        // Based on image: Row 1: INVENTORY LIST, Row 2: empty, Row 3: Headers, Row 4: Data
-        // Actually, looking at the image, Row 1 is "INVENTORY LIST", Row 2 is empty, Row 3 is Headers.
-        // Data starts at Row 4 (index 3).
         const rows = data.slice(3);
+        const uniqueBarcodes = new Set<string>();
+        const validRows = rows.filter(row => String(row[0] || '').trim() && String(row[1] || '').trim());
+        
+        setImportProgress({ current: 0, total: validRows.length });
 
-        let importedCount = 0;
-        for (const row of rows) {
+        let processed = 0;
+        for (const row of validRows) {
           const barcode = String(row[0] || '').trim();
           const name = String(row[1] || '').trim();
           const location = String(row[2] || '').trim();
           const model = String(row[3] || '').trim();
           const vendor = String(row[4] || '').trim();
 
-          if (barcode && name) {
-            const partRef = doc(db, 'spareparts', barcode);
-            // We use merge: true to avoid overwriting stock if it already exists
-            await setDoc(partRef, {
-              barcode,
-              name,
-              location,
-              model,
-              vendor,
-              description: '',
-              // Only set stock to 0 if it doesn't exist yet
-            }, { merge: true });
-            
-            // If it's a new part, we should ensure stock is initialized
-            const partSnap = await getDoc(partRef);
-            if (!partSnap.exists() || partSnap.data()?.stock === undefined) {
-              await updateDoc(partRef, { stock: 0 });
-            }
-            
-            importedCount++;
+          uniqueBarcodes.add(barcode);
+          const partRef = doc(db, 'spareparts', barcode);
+          
+          await setDoc(partRef, {
+            barcode,
+            name,
+            location,
+            model,
+            vendor,
+            description: '',
+          }, { merge: true });
+
+          const partSnap = await getDoc(partRef);
+          if (!partSnap.exists() || partSnap.data()?.stock === undefined) {
+            await updateDoc(partRef, { stock: 0 });
           }
+
+          processed++;
+          setImportProgress(prev => ({ ...prev, current: processed }));
         }
 
-        setMessage({ type: 'success', text: `Successfully imported ${importedCount} spare parts.` });
+        const finalCount = uniqueBarcodes.size;
+        setMessage({ type: 'success', text: `Successfully imported ${finalCount} unique spare parts.` });
+        
         const snap = await getDocs(collection(db, 'spareparts'));
         setStats(prev => ({ ...prev, totalParts: snap.size }));
         setShowSettings(false);
+        setIsImporting(false);
       };
       reader.readAsBinaryString(file);
     } catch (err) {
       console.error("Import error:", err);
       setMessage({ type: 'error', text: "Failed to import Excel file." });
+      setIsImporting(false);
     } finally {
-      setIsClearing(false);
       setTimeout(() => setMessage(null), 5000);
     }
   };
@@ -511,6 +515,64 @@ export default function App() {
                 >
                   Close
                 </button>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {isImporting && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[70] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md"
+            >
+              <motion.div 
+                initial={{ scale: 0.9, y: 20 }}
+                animate={{ scale: 1, y: 0 }}
+                className="w-full max-w-sm bg-white rounded-[40px] p-10 shadow-2xl text-center border border-brand-border"
+              >
+                <div className="relative w-24 h-24 mx-auto mb-8">
+                  <div className="absolute inset-0 border-4 border-slate-100 rounded-full"></div>
+                  <svg className="absolute inset-0 w-full h-full -rotate-90">
+                    <circle
+                      cx="48"
+                      cy="48"
+                      r="44"
+                      fill="none"
+                      stroke="black"
+                      strokeWidth="8"
+                      strokeDasharray={276}
+                      strokeDashoffset={276 - (276 * (importProgress.current / (importProgress.total || 1)))}
+                      strokeLinecap="round"
+                      className="transition-all duration-300"
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Loader2 className="w-8 h-8 animate-spin text-black opacity-20" />
+                  </div>
+                </div>
+                
+                <h3 className="text-2xl font-serif font-black tracking-tight text-slate-900 mb-2">Importing Data...</h3>
+                <p className="text-slate-500 text-sm mb-6">Processing your Excel file</p>
+                
+                <div className="bg-slate-50 rounded-2xl p-4 border border-brand-border">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Progress</span>
+                    <span className="text-[10px] font-bold text-slate-900 uppercase tracking-widest">
+                      {importProgress.current} / {importProgress.total}
+                    </span>
+                  </div>
+                  <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                    <motion.div 
+                      initial={{ width: 0 }}
+                      animate={{ width: `${(importProgress.current / (importProgress.total || 1)) * 100}%` }}
+                      className="h-full bg-black"
+                    />
+                  </div>
+                </div>
+                <p className="mt-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest animate-pulse">Please do not close this window</p>
               </motion.div>
             </motion.div>
           )}
