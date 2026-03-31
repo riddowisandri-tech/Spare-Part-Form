@@ -37,7 +37,8 @@ import {
   Camera,
   Zap,
   Cpu,
-  LayoutDashboard
+  LayoutDashboard,
+  Download
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -288,6 +289,40 @@ export default function App() {
       setIsImporting(false);
     } finally {
       setTimeout(() => setMessage(null), 5000);
+    }
+  };
+
+  const exportToExcel = () => {
+    try {
+      if (transactions.length === 0) {
+        setMessage({ type: 'error', text: "No transaction history to export." });
+        return;
+      }
+
+      const dataToExport = transactions.map(tx => ({
+        'Date': tx.timestamp?.toDate().toLocaleDateString('en-GB'),
+        'Time': tx.timestamp?.toDate().toLocaleTimeString(),
+        'Part Name': tx.partName,
+        'Barcode': tx.partBarcode,
+        'Technician': tx.technicianName,
+        'Action': tx.action === 'take' ? 'Taken' : 'Returned',
+        'Quantity': tx.quantity,
+        'Notes': tx.notes || '-'
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(dataToExport);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "History");
+      
+      const dateStr = new Date().toISOString().split('T')[0];
+      XLSX.writeFile(wb, `SpareParts_History_${dateStr}.xlsx`);
+      
+      setMessage({ type: 'success', text: "History exported successfully!" });
+    } catch (error) {
+      console.error("Export error:", error);
+      setMessage({ type: 'error', text: "Failed to export history." });
+    } finally {
+      setTimeout(() => setMessage(null), 3000);
     }
   };
 
@@ -1185,14 +1220,24 @@ export default function App() {
               exit={{ opacity: 0, x: -20 }}
               className="space-y-8"
             >
-              <div className="flex items-center justify-between">
-                <button onClick={() => setView('home')} className="flex items-center gap-3 text-slate-500 hover:text-black transition-all group">
+              <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+                <button onClick={() => setView('home')} className="flex items-center gap-3 text-slate-500 hover:text-black transition-all group self-start">
                   <div className="w-10 h-10 rounded-xl border border-slate-200 flex items-center justify-center group-hover:border-black bg-white shadow-sm">
                     <ChevronLeft className="w-5 h-5" />
                   </div>
                   <span className="font-bold uppercase tracking-wider text-[10px]">Back to Dashboard</span>
                 </button>
-                <h2 className="text-3xl font-serif font-black tracking-tight bg-gradient-to-r from-slate-900 to-slate-500 bg-clip-text text-transparent">Transaction History</h2>
+                
+                <div className="flex flex-col md:flex-row items-center gap-6">
+                  <button 
+                    onClick={exportToExcel}
+                    className="flex items-center gap-3 px-6 py-3 bg-emerald-500 text-white rounded-2xl font-bold text-[10px] uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 group"
+                  >
+                    <Download className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                    Download History (.xlsx)
+                  </button>
+                  <h2 className="text-3xl font-serif font-black tracking-tight bg-gradient-to-r from-slate-900 to-slate-500 bg-clip-text text-transparent">Transaction History</h2>
+                </div>
               </div>
 
               <div className="bg-white rounded-3xl border border-brand-border shadow-sm overflow-hidden">
