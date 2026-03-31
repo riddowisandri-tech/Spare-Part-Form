@@ -880,7 +880,7 @@ export default function App() {
                   </div>
                   <div className="relative z-10">
                     <p className="text-slate-500 text-sm mb-6 px-4">
-                      Ready to update stock? <span className="font-bold text-slate-900">Quick Scan</span> to record transactions.
+                      Pick up spare parts? <span className="font-bold text-slate-900">Quick Scan</span> to record transactions.
                     </p>
                     <button 
                       onClick={() => setView('scan')}
