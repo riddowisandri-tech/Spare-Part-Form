@@ -304,7 +304,7 @@ export default function App() {
         'Time': tx.timestamp?.toDate().toLocaleTimeString(),
         'Part Name': tx.partName,
         'Barcode': tx.partBarcode,
-        'Technician': tx.technicianName,
+        'Name': tx.technicianName,
         'Action': tx.action === 'take' ? 'Taken' : 'Returned',
         'Quantity': tx.quantity,
         'Notes': tx.notes || '-'
@@ -743,7 +743,7 @@ export default function App() {
                         <p className="text-sm font-bold text-slate-900">{pendingTransaction.quantity} Units</p>
                       </div>
                       <div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Technician</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Name</p>
                         <p className="text-sm font-bold text-slate-900">{pendingTransaction.technicianName}</p>
                       </div>
                       <div>
@@ -1165,7 +1165,7 @@ export default function App() {
                     )}
 
                     <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Technician Name</label>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Name</label>
                       <input 
                         name="technicianName"
                         required
@@ -1247,7 +1247,7 @@ export default function App() {
                       <tr className="bg-slate-50/50 border-b border-brand-border">
                         <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Time</th>
                         <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Part Info</th>
-                        <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Technician</th>
+                        <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Name</th>
                         <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Qty</th>
                         <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Remarks</th>
                       </tr>
