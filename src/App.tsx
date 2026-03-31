@@ -119,6 +119,7 @@ export default function App() {
   const [manualBarcode, setManualBarcode] = useState('');
   const [stats, setStats] = useState({ totalParts: 0, todayTxs: 0 });
   const [showSettings, setShowSettings] = useState(false);
+  const [isCameraActive, setIsCameraActive] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState({ current: 0, total: 0 });
@@ -135,6 +136,13 @@ export default function App() {
     vendor?: string;
   } | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Reset camera state when leaving scan view
+  useEffect(() => {
+    if (view !== 'scan') {
+      setIsCameraActive(false);
+    }
+  }, [view]);
 
   // Clock Timer
   useEffect(() => {
@@ -939,28 +947,57 @@ export default function App() {
                 </div>
 
                 <div className="relative aspect-video bg-slate-50 rounded-3xl overflow-hidden border-4 border-white shadow-lg group">
-                  <Scanner onScanSuccess={onScanSuccess} />
+                  {isCameraActive ? (
+                    <Scanner onScanSuccess={onScanSuccess} />
+                  ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 gap-4 bg-slate-900/5">
+                      <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-sm border border-slate-100">
+                        <Camera className="w-10 h-10 text-slate-300" />
+                      </div>
+                      <div className="text-center">
+                        <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-1">Camera Inactive</p>
+                        <p className="text-[10px] text-slate-300 font-medium">Click "Camera Mode" below to activate</p>
+                      </div>
+                    </div>
+                  )}
                   
                   {/* Scanner Overlay UI */}
-                  <div className="absolute inset-0 pointer-events-none border-[40px] border-white/40">
-                    <div className="w-full h-full border-2 border-slate-100 relative">
-                      {/* Corner Accents */}
-                      <div className="absolute -top-1 -left-1 w-8 h-8 border-t-4 border-l-4 border-black rounded-tl-lg"></div>
-                      <div className="absolute -top-1 -right-1 w-8 h-8 border-t-4 border-r-4 border-black rounded-tr-lg"></div>
-                      <div className="absolute -bottom-1 -left-1 w-8 h-8 border-b-4 border-l-4 border-black rounded-bl-lg"></div>
-                      <div className="absolute -bottom-1 -right-1 w-8 h-8 border-b-4 border-r-4 border-black rounded-br-lg"></div>
+                  {isCameraActive && (
+                    <div className="absolute inset-0 pointer-events-none border-[40px] border-white/40">
+                      <div className="w-full h-full border-2 border-slate-100 relative">
+                        {/* Corner Accents */}
+                        <div className="absolute -top-1 -left-1 w-8 h-8 border-t-4 border-l-4 border-black rounded-tl-lg"></div>
+                        <div className="absolute -top-1 -right-1 w-8 h-8 border-t-4 border-r-4 border-black rounded-tr-lg"></div>
+                        <div className="absolute -bottom-1 -left-1 w-8 h-8 border-b-4 border-l-4 border-black rounded-bl-lg"></div>
+                        <div className="absolute -bottom-1 -right-1 w-8 h-8 border-b-4 border-r-4 border-black rounded-br-lg"></div>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="p-6 bg-slate-50 rounded-2xl border border-brand-border space-y-2">
-                    <div className="flex items-center gap-2 text-black">
-                      <Camera className="w-4 h-4" />
-                      <span className="text-xs font-bold uppercase tracking-widest">Camera Mode</span>
+                  <button 
+                    onClick={() => setIsCameraActive(!isCameraActive)}
+                    className={cn(
+                      "p-6 rounded-2xl border transition-all text-left group relative overflow-hidden",
+                      isCameraActive 
+                        ? "bg-black border-black text-white shadow-lg shadow-black/10" 
+                        : "bg-slate-50 border-brand-border hover:bg-white hover:border-black"
+                    )}
+                  >
+                    <div className="relative z-10 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Camera className={cn("w-4 h-4", isCameraActive ? "text-white" : "text-black")} />
+                        <span className="text-xs font-bold uppercase tracking-widest">Camera Mode</span>
+                        {isCameraActive && (
+                          <span className="ml-auto flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        )}
+                      </div>
+                      <p className={cn("text-sm leading-relaxed", isCameraActive ? "text-white/70" : "text-slate-500")}>
+                        {isCameraActive ? "Camera is active. Position the barcode within the frame." : "Click to activate camera for automatic detection."}
+                      </p>
                     </div>
-                    <p className="text-slate-500 text-sm leading-relaxed">Position the barcode within the central frame for automatic detection.</p>
-                  </div>
+                  </button>
                   <div className="p-6 bg-slate-50 rounded-2xl border border-brand-border space-y-2">
                     <div className="flex items-center gap-2 text-black">
                       <Zap className="w-4 h-4" />
