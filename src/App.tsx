@@ -784,7 +784,7 @@ export default function App() {
                 <div className="space-y-6">
                   <div className="flex items-center justify-between">
                     <h3 className="text-3xl font-serif font-black tracking-tight bg-gradient-to-r from-slate-900 to-slate-500 bg-clip-text text-transparent">Recent Activity</h3>
-                    <button onClick={() => setView('history')} className="text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-black transition-colors">View All Logs</button>
+                    <button onClick={() => setView('history')} className="text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-black transition-colors">View All</button>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {transactions.slice(0, 3).map((tx, i) => (
@@ -888,7 +888,7 @@ export default function App() {
                   {[
                     { label: 'Registered Part', value: stats.totalParts, icon: <Box className="w-5 h-5" />, color: 'bg-slate-50' },
                     { label: 'Today', value: stats.todayTxs, icon: <ArrowRightLeft className="w-5 h-5" />, color: 'bg-slate-50' },
-                    { label: 'Total Logs', value: transactions.length, icon: <History className="w-5 h-5" />, color: 'bg-slate-50', span: 'col-span-2' }
+                    { label: 'Total Activity', value: transactions.length, icon: <History className="w-5 h-5" />, color: 'bg-slate-50', span: 'col-span-2' }
                   ].map((stat, i) => (
                     <div key={i} className={cn("bg-white rounded-[32px] p-6 shadow-sm border border-brand-border hover:bg-slate-50 transition-all group", stat.span)}>
                       <div className="flex items-center gap-4 mb-4">
@@ -924,6 +924,20 @@ export default function App() {
               </div>
 
               <div className="bg-white rounded-3xl p-10 space-y-10 shadow-sm border border-brand-border">
+                <div className="relative max-w-2xl mx-auto group">
+                  <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-black transition-colors" />
+                  <input 
+                    ref={usbInputRef}
+                    type="text"
+                    value={manualBarcode}
+                    onChange={(e) => setManualBarcode(e.target.value)}
+                    onKeyDown={handleUsbScan}
+                    placeholder="Or type barcode manually..."
+                    className="w-full bg-slate-50 border border-brand-border rounded-2xl pl-16 pr-6 py-5 text-slate-900 font-mono font-bold text-lg outline-none focus:ring-4 focus:ring-black/5 focus:border-black transition-all placeholder:text-slate-300"
+                    autoFocus
+                  />
+                </div>
+
                 <div className="relative aspect-video bg-slate-50 rounded-3xl overflow-hidden border-4 border-white shadow-lg group">
                   <Scanner onScanSuccess={onScanSuccess} />
                   
@@ -954,20 +968,6 @@ export default function App() {
                     </div>
                     <p className="text-slate-500 text-sm leading-relaxed">External scanners are supported. Simply scan and the system will redirect.</p>
                   </div>
-                </div>
-
-                <div className="relative max-w-2xl mx-auto group">
-                  <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-black transition-colors" />
-                  <input 
-                    ref={usbInputRef}
-                    type="text"
-                    value={manualBarcode}
-                    onChange={(e) => setManualBarcode(e.target.value)}
-                    onKeyDown={handleUsbScan}
-                    placeholder="Or type barcode manually..."
-                    className="w-full bg-slate-50 border border-brand-border rounded-2xl pl-16 pr-6 py-5 text-slate-900 font-mono font-bold text-lg outline-none focus:ring-4 focus:ring-black/5 focus:border-black transition-all placeholder:text-slate-300"
-                    autoFocus
-                  />
                 </div>
               </div>
             </motion.div>
@@ -1285,32 +1285,57 @@ function Scanner({ onScanSuccess }: { onScanSuccess: (text: string) => void }) {
     html5QrCodeRef.current = html5QrCode;
 
     const startScanner = async () => {
+      const config = {
+        fps: 20,
+        qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
+          const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+          const qrboxSize = Math.floor(minEdge * 0.7);
+          return {
+            width: qrboxSize,
+            height: qrboxSize
+          };
+        },
+        aspectRatio: 1.0,
+      };
+
       try {
-        // On mobile, "environment" is the back camera
+        // Try back camera first
         await html5QrCode.start(
           { facingMode: "environment" },
-          {
-            fps: 20,
-            qrbox: (viewfinderWidth, viewfinderHeight) => {
-              const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-              const qrboxSize = Math.floor(minEdge * 0.7);
-              return {
-                width: qrboxSize,
-                height: qrboxSize
-              };
-            },
-            aspectRatio: 1.0,
-          },
+          config,
           (decodedText) => {
             onScanSuccess(decodedText);
           },
-          () => {
-            // Ignore scanning errors
-          }
+          () => {}
         );
       } catch (err) {
-        console.error("Failed to start scanner:", err);
-        setError("Camera access failed. Please ensure you have granted camera permissions and are using a secure connection (HTTPS).");
+        console.warn("Failed to start with environment camera, trying default:", err);
+        try {
+          // Fallback to any available camera if environment fails
+          await html5QrCode.start(
+            { facingMode: "user" }, // Try front camera
+            config,
+            (decodedText) => {
+              onScanSuccess(decodedText);
+            },
+            () => {}
+          );
+        } catch (err2) {
+          try {
+            // Last resort: just try to start with no constraints
+            await html5QrCode.start(
+              undefined as any,
+              config,
+              (decodedText) => {
+                onScanSuccess(decodedText);
+              },
+              () => {}
+            );
+          } catch (finalErr) {
+            console.error("Failed to start scanner:", finalErr);
+            setError("Camera access failed. Please ensure you have granted camera permissions and are using a secure connection (HTTPS).");
+          }
+        }
       }
     };
 
