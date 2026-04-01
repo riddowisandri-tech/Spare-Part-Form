@@ -140,6 +140,7 @@ export default function App() {
   } | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [adminPassword, setAdminPassword] = useState('');
+  const [passwordError, setPasswordError] = useState(false);
   const [showPasswordPrompt, setShowPasswordPrompt] = useState<{
     action: () => void;
     title: string;
@@ -156,10 +157,15 @@ export default function App() {
       const action = showPasswordPrompt?.action;
       setShowPasswordPrompt(null);
       setAdminPassword('');
+      setPasswordError(false);
       if (action) action();
     } else {
+      setPasswordError(true);
       setMessage({ type: 'error', text: "Incorrect password!" });
-      setTimeout(() => setMessage(null), 3000);
+      setTimeout(() => {
+        setMessage(null);
+        setPasswordError(false);
+      }, 3000);
     }
   };
 
@@ -627,7 +633,15 @@ export default function App() {
             >
               <motion.div 
                 initial={{ scale: 0.95, y: 10 }}
-                animate={{ scale: 1, y: 0 }}
+                animate={passwordError ? { 
+                  x: [0, -10, 10, -10, 10, 0],
+                  scale: 1, 
+                  y: 0 
+                } : { 
+                  scale: 1, 
+                  y: 0 
+                }}
+                transition={passwordError ? { duration: 0.4 } : {}}
                 className="w-full max-w-sm bg-white rounded-3xl shadow-2xl border border-brand-border overflow-hidden"
               >
                 <div className="p-8 text-center">
@@ -638,22 +652,44 @@ export default function App() {
                   <p className="text-slate-500 text-sm mb-8 leading-relaxed">Please enter the admin password to proceed with <strong>{showPasswordPrompt.title}</strong>.</p>
                   
                   <div className="space-y-4">
-                    <input 
-                      type="password"
-                      value={adminPassword}
-                      onChange={(e) => setAdminPassword(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && verifyPassword()}
-                      placeholder="Enter Password"
-                      autoFocus
-                      className="input-field w-full text-center"
-                    />
+                    <div className="relative">
+                      <input 
+                        type="password"
+                        value={adminPassword}
+                        onChange={(e) => {
+                          setAdminPassword(e.target.value);
+                          if (passwordError) setPasswordError(false);
+                        }}
+                        onKeyDown={(e) => e.key === 'Enter' && verifyPassword()}
+                        placeholder="Enter Password"
+                        autoFocus
+                        className={cn(
+                          "input-field w-full text-center transition-all",
+                          passwordError && "border-red-500 bg-red-50 text-red-900 placeholder:text-red-300"
+                        )}
+                      />
+                      {passwordError && (
+                        <motion.p 
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="text-[10px] font-bold text-red-500 uppercase tracking-widest mt-2"
+                        >
+                          Incorrect Password
+                        </motion.p>
+                      )}
+                    </div>
                     
                     <div className="flex flex-col gap-3">
                       <button 
                         onClick={verifyPassword}
-                        className="w-full py-4 bg-black text-white rounded-2xl font-bold hover:bg-slate-800 transition-all flex items-center justify-center gap-2 shadow-lg shadow-black/20"
+                        className={cn(
+                          "w-full py-4 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 shadow-lg",
+                          passwordError 
+                            ? "bg-red-500 text-white shadow-red-500/20" 
+                            : "bg-black text-white shadow-black/20 hover:bg-slate-800"
+                        )}
                       >
-                        Verify & Continue
+                        {passwordError ? "Try Again" : "Verify & Continue"}
                       </button>
                       <button 
                         onClick={() => {
