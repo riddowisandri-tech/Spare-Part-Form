@@ -64,6 +64,7 @@ interface Transaction {
   id: string;
   partBarcode: string;
   technicianName: string;
+  team: string;
   action: 'take' | 'return';
   quantity: number;
   notes: string;
@@ -129,6 +130,7 @@ export default function App() {
     barcode: string;
     partName: string;
     technicianName: string;
+    team: string;
     quantity: number;
     notes: string;
     isNewPart: boolean;
@@ -137,6 +139,29 @@ export default function App() {
     vendor?: string;
   } | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [adminPassword, setAdminPassword] = useState('');
+  const [showPasswordPrompt, setShowPasswordPrompt] = useState<{
+    action: () => void;
+    title: string;
+  } | null>(null);
+
+  const ADMIN_PASSWORD = "lego";
+
+  const handleAdminAction = (title: string, action: () => void) => {
+    setShowPasswordPrompt({ title, action });
+  };
+
+  const verifyPassword = () => {
+    if (adminPassword === ADMIN_PASSWORD) {
+      const action = showPasswordPrompt?.action;
+      setShowPasswordPrompt(null);
+      setAdminPassword('');
+      if (action) action();
+    } else {
+      setMessage({ type: 'error', text: "Incorrect password!" });
+      setTimeout(() => setMessage(null), 3000);
+    }
+  };
 
   // Reset camera state when leaving scan view
   useEffect(() => {
@@ -305,6 +330,7 @@ export default function App() {
         'Part Name': tx.partName,
         'Barcode': tx.partBarcode,
         'Name': tx.technicianName,
+        'Team': tx.team || '-',
         'Action': tx.action === 'take' ? 'Taken' : 'Returned',
         'Quantity': tx.quantity,
         'Notes': tx.notes || '-'
@@ -353,6 +379,7 @@ export default function App() {
 
     const formData = new FormData(e.currentTarget);
     const technicianName = formData.get('technicianName') as string;
+    const team = formData.get('team') as string;
     const quantity = parseInt(formData.get('quantity') as string) || 1;
     const notes = formData.get('notes') as string;
     const partName = (formData.get('name') as string || currentPart?.name || scannedBarcode) as string;
@@ -365,10 +392,16 @@ export default function App() {
       return;
     }
 
+    if (!team) {
+      setMessage({ type: 'error', text: "Please select your team." });
+      return;
+    }
+
     setPendingTransaction({
       barcode: scannedBarcode,
       partName,
       technicianName,
+      team,
       quantity,
       notes,
       isNewPart: !currentPart,
@@ -382,7 +415,7 @@ export default function App() {
     if (!pendingTransaction) return;
     
     setIsSubmitting(true);
-    const { barcode, partName, technicianName, quantity, notes, isNewPart, location, model, vendor } = pendingTransaction;
+    const { barcode, partName, technicianName, team, quantity, notes, isNewPart, location, model, vendor } = pendingTransaction;
 
     try {
       const partRef = doc(db, 'spareparts', barcode);
@@ -407,6 +440,7 @@ export default function App() {
         partBarcode: barcode,
         partName,
         technicianName,
+        team,
         action: 'take',
         quantity,
         notes,
@@ -508,11 +542,11 @@ export default function App() {
 
                 <div className="space-y-4">
                   <button 
-                    onClick={() => setConfirmAction({ 
+                    onClick={() => handleAdminAction('Clear History', () => setConfirmAction({ 
                       type: 'history', 
                       title: 'Clear History', 
                       message: 'Are you sure you want to delete all transaction logs? This cannot be undone.' 
-                    })}
+                    }))}
                     disabled={isClearing}
                     className="w-full p-4 bg-slate-50 rounded-2xl flex items-center gap-4 hover:bg-slate-100 transition-all border border-brand-border disabled:opacity-50 group"
                   >
@@ -526,11 +560,11 @@ export default function App() {
                   </button>
 
                   <button 
-                    onClick={() => setConfirmAction({ 
+                    onClick={() => handleAdminAction('Clear Parts Data', () => setConfirmAction({ 
                       type: 'parts', 
                       title: 'Clear Parts Data', 
                       message: 'Are you sure you want to delete all parts? All stock and names will be lost.' 
-                    })}
+                    }))}
                     disabled={isClearing}
                     className="w-full p-4 bg-slate-50 rounded-2xl flex items-center gap-4 hover:bg-slate-100 transition-all border border-brand-border disabled:opacity-50 group"
                   >
@@ -544,7 +578,13 @@ export default function App() {
                   </button>
 
                   <div className="pt-4 border-t border-brand-border">
-                    <label className="block w-full p-5 bg-emerald-500/5 rounded-2xl border border-emerald-500/20 cursor-pointer hover:bg-emerald-500/10 transition-all group">
+                    <div 
+                      onClick={() => handleAdminAction('Import Data', () => {
+                        const input = document.getElementById('excel-import-input');
+                        if (input) input.click();
+                      })}
+                      className="block w-full p-5 bg-emerald-500/5 rounded-2xl border border-emerald-500/20 cursor-pointer hover:bg-emerald-500/10 transition-all group"
+                    >
                       <div className="flex items-center gap-4">
                         <div className="w-10 h-10 bg-emerald-500/10 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
                           <Plus className="w-5 h-5 text-emerald-500" />
@@ -555,13 +595,14 @@ export default function App() {
                         </div>
                       </div>
                       <input 
+                        id="excel-import-input"
                         type="file" 
                         accept=".xlsx, .xls" 
                         className="hidden" 
                         onChange={handleImportExcel}
                         disabled={isClearing}
                       />
-                    </label>
+                    </div>
                   </div>
                 </div>
 
@@ -571,6 +612,61 @@ export default function App() {
                 >
                   Close
                 </button>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {showPasswordPrompt && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[80] flex items-center justify-center p-6 bg-slate-900/40 backdrop-blur-sm"
+            >
+              <motion.div 
+                initial={{ scale: 0.95, y: 10 }}
+                animate={{ scale: 1, y: 0 }}
+                className="w-full max-w-sm bg-white rounded-3xl shadow-2xl border border-brand-border overflow-hidden"
+              >
+                <div className="p-8 text-center">
+                  <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                    <Settings className="w-8 h-8 text-slate-900" />
+                  </div>
+                  <h3 className="text-xl font-bold text-slate-900 mb-2">Admin Access</h3>
+                  <p className="text-slate-500 text-sm mb-8 leading-relaxed">Please enter the admin password to proceed with <strong>{showPasswordPrompt.title}</strong>.</p>
+                  
+                  <div className="space-y-4">
+                    <input 
+                      type="password"
+                      value={adminPassword}
+                      onChange={(e) => setAdminPassword(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && verifyPassword()}
+                      placeholder="Enter Password"
+                      autoFocus
+                      className="input-field w-full text-center"
+                    />
+                    
+                    <div className="flex flex-col gap-3">
+                      <button 
+                        onClick={verifyPassword}
+                        className="w-full py-4 bg-black text-white rounded-2xl font-bold hover:bg-slate-800 transition-all flex items-center justify-center gap-2 shadow-lg shadow-black/20"
+                      >
+                        Verify & Continue
+                      </button>
+                      <button 
+                        onClick={() => {
+                          setShowPasswordPrompt(null);
+                          setAdminPassword('');
+                        }}
+                        className="w-full py-4 bg-slate-50 text-slate-500 rounded-2xl font-bold hover:text-slate-900 transition-all"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </motion.div>
             </motion.div>
           )}
@@ -745,6 +841,10 @@ export default function App() {
                       <div>
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Name</p>
                         <p className="text-sm font-bold text-slate-900">{pendingTransaction.technicianName}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Team</p>
+                        <p className="text-sm font-bold text-slate-900">{pendingTransaction.team}</p>
                       </div>
                       <div>
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Barcode</p>
@@ -1175,6 +1275,20 @@ export default function App() {
                     </div>
 
                     <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Team</label>
+                      <select 
+                        name="team"
+                        required
+                        className="input-field w-full appearance-none bg-white"
+                      >
+                        <option value="">Select Team</option>
+                        <option value="FCT">FCT</option>
+                        <option value="TESTER">TESTER</option>
+                        <option value="AUTOMATION">AUTOMATION</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-2">
                       <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Quantity</label>
                       <input 
                         type="number"
@@ -1248,6 +1362,7 @@ export default function App() {
                         <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Time</th>
                         <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Part Info</th>
                         <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Name</th>
+                        <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Team</th>
                         <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Qty</th>
                         <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Remarks</th>
                       </tr>
@@ -1274,6 +1389,11 @@ export default function App() {
                               </div>
                               <span className="text-slate-600 font-medium text-sm">{tx.technicianName}</span>
                             </div>
+                          </td>
+                          <td className="px-8 py-5">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                              {tx.team || '-'}
+                            </span>
                           </td>
                           <td className="px-8 py-5 text-center">
                             <span className="inline-flex items-center justify-center px-3 py-1 rounded-lg bg-slate-100 text-slate-900 font-bold text-xs border border-slate-200">
