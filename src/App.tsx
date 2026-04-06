@@ -65,12 +65,15 @@ interface SparePart {
 interface Transaction {
   id: string;
   partBarcode: string;
+  partName: string;
   technicianName: string;
   team: string;
   action: 'take' | 'return';
   quantity: number;
   notes: string;
   timestamp: any;
+  status: 'open' | 'close';
+  verifiedBy?: string;
 }
 
 // --- Constants ---
@@ -127,6 +130,8 @@ export default function App() {
   const [currentPart, setCurrentPart] = useState<SparePart | null>(null);
   const [parts, setParts] = useState<SparePart[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [selectedTransactionId, setSelectedTransactionId] = useState<string | null>(null);
+  const [showPartDetailsModal, setShowPartDetailsModal] = useState<SparePart | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [manualBarcode, setManualBarcode] = useState('');
@@ -138,6 +143,7 @@ export default function App() {
     automationParts: 0
   });
   const [dashboardTeamTab, setDashboardTeamTab] = useState<'ALL' | 'FCT' | 'TESTER' | 'AUTOMATION'>('ALL');
+  const [importTeam, setImportTeam] = useState<'FCT' | 'TESTER' | 'AUTOMATION'>('FCT');
   const [filterMonth, setFilterMonth] = useState<string>(new Date().toLocaleString('default', { month: 'long' }));
   const [filterYear, setFilterYear] = useState<string>(new Date().getFullYear().toString());
   const [showSettings, setShowSettings] = useState(false);
@@ -325,6 +331,7 @@ export default function App() {
             location,
             model,
             vendor,
+            team: importTeam,
             description: '',
           }, { merge: true });
 
@@ -493,6 +500,7 @@ export default function App() {
         action: 'take',
         quantity,
         notes,
+        status: 'open',
         timestamp: serverTimestamp()
       });
 
@@ -521,13 +529,41 @@ export default function App() {
     return monthMatch && yearMatch && teamMatch;
   });
 
+  const selectedTx = filteredTransactions.find(t => t.id === selectedTransactionId) || filteredTransactions[0];
+
+  const handleViewPartDetails = (barcode: string) => {
+    const part = parts.find(p => p.barcode === barcode);
+    if (part) {
+      setShowPartDetailsModal(part);
+    } else {
+      setMessage({ type: 'error', text: 'Part details not found in database.' });
+      setTimeout(() => setMessage(null), 3000);
+    }
+  };
+
+  const handleVerifyTransaction = async (txId: string) => {
+    try {
+      const txRef = doc(db, 'transactions', txId);
+      await updateDoc(txRef, {
+        status: 'close',
+        verifiedBy: 'Spare Part Control' // Mocking the control user
+      });
+      setMessage({ type: 'success', text: 'Transaction verified successfully.' });
+    } catch (error) {
+      console.error("Verification failed", error);
+      setMessage({ type: 'error', text: 'Failed to verify transaction.' });
+    } finally {
+      setTimeout(() => setMessage(null), 3000);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-brand-bg text-slate-900 font-sans flex">
       {/* Sidebar - Desktop */}
-      <aside className="hidden lg:flex w-28 flex-col bg-white border-r border-brand-border sticky top-0 h-screen py-8 overflow-visible z-20">
+      <aside className="hidden lg:flex w-28 flex-col bg-black sticky top-0 h-screen py-8 overflow-visible z-20">
         <div className="flex flex-col items-center gap-12 w-full overflow-visible">
           <div className="w-full px-2 transition-transform duration-500 hover:scale-110">
-            <Logo dark={true} />
+            <Logo />
           </div>
           
           <nav className="w-full flex flex-col items-end overflow-visible">
@@ -638,6 +674,26 @@ export default function App() {
                   </button>
 
                   <div className="pt-4 border-t border-brand-border">
+                    <div className="mb-4">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Select Team for Import</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        {['FCT', 'TESTER', 'AUTOMATION'].map((team) => (
+                          <button
+                            key={team}
+                            onClick={() => setImportTeam(team as any)}
+                            className={cn(
+                              "py-2 rounded-xl text-[10px] font-bold transition-all border",
+                              importTeam === team 
+                                ? "bg-slate-900 text-white border-slate-900" 
+                                : "bg-white text-slate-400 border-slate-200 hover:border-slate-300"
+                            )}
+                          >
+                            {team}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    
                     <div 
                       onClick={() => handleAdminAction('Import Data', () => {
                         const input = document.getElementById('excel-import-input');
@@ -651,7 +707,7 @@ export default function App() {
                         </div>
                         <div className="text-left">
                           <p className="font-bold text-emerald-600">Import from Excel</p>
-                          <p className="text-xs text-emerald-500/70">Upload your inventory list (.xlsx)</p>
+                          <p className="text-xs text-emerald-500/70">Upload for {importTeam} Team (.xlsx)</p>
                         </div>
                       </div>
                       <input 
@@ -1105,14 +1161,31 @@ export default function App() {
                     <h4 className="text-xs font-bold text-slate-900 uppercase tracking-widest mb-6">Recent Activity</h4>
                     <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
                       {filteredTransactions.map((tx) => (
-                        <div key={tx.id} className="flex items-center justify-between p-4 rounded-2xl hover:bg-slate-50 transition-all group cursor-pointer border border-transparent hover:border-slate-100">
+                        <div 
+                          key={tx.id} 
+                          onClick={() => setSelectedTransactionId(tx.id)}
+                          className={cn(
+                            "flex items-center justify-between p-4 rounded-2xl transition-all group cursor-pointer border",
+                            (selectedTransactionId === tx.id || (!selectedTransactionId && filteredTransactions[0]?.id === tx.id))
+                              ? "bg-slate-50 border-slate-200 shadow-sm" 
+                              : "hover:bg-slate-50 border-transparent hover:border-slate-100"
+                          )}
+                        >
                           <div className="flex items-center gap-4">
                             <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-900 font-bold text-xs uppercase">
                               {tx.technicianName.charAt(0)}
                             </div>
                             <div>
-                              <p className="text-sm font-bold text-slate-900">#{tx.partBarcode.slice(-6)}</p>
-                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{tx.timestamp?.toDate().toLocaleDateString([], { day: 'numeric', month: 'short' })}</p>
+                              <p className="text-sm font-bold text-slate-900">#{tx.partBarcode}</p>
+                              <div className="flex items-center gap-2">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{tx.timestamp?.toDate().toLocaleDateString([], { day: 'numeric', month: 'short' })}</p>
+                                <span className={cn(
+                                  "text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-md",
+                                  tx.status === 'open' ? "bg-amber-50 text-amber-600 border border-amber-100" : "bg-emerald-50 text-emerald-600 border border-emerald-100"
+                                )}>
+                                  {tx.status}
+                                </span>
+                              </div>
                             </div>
                           </div>
                           <div className="text-right">
@@ -1142,39 +1215,65 @@ export default function App() {
                       <div className="flex items-center justify-between mb-12">
                         <div>
                           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Transaction Details</p>
-                          <h3 className="text-4xl font-serif font-black tracking-tighter">
-                            {filteredTransactions[0] ? `#${filteredTransactions[0].partBarcode}` : 'No Data'}
-                          </h3>
+                          <div className="flex items-center gap-3">
+                            <h3 className="text-4xl font-serif font-black tracking-tighter">
+                              {selectedTx ? `#${selectedTx.partBarcode}` : 'No Data'}
+                            </h3>
+                            {selectedTx && (
+                              <span className={cn(
+                                "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border",
+                                selectedTx.status === 'open' ? "bg-amber-50 text-amber-600 border-amber-200" : "bg-emerald-50 text-emerald-600 border-emerald-200"
+                              )}>
+                                {selectedTx.status}
+                              </span>
+                            )}
+                          </div>
                         </div>
                         <div className="text-right">
                           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Team</p>
-                          <p className="text-2xl font-serif font-black">{filteredTransactions[0]?.team || '-'}</p>
+                          <p className="text-2xl font-serif font-black">{selectedTx?.team || '-'}</p>
                         </div>
                       </div>
 
                       <div className="grid grid-cols-3 gap-8 mb-12">
                         <div>
                           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Technician</p>
-                          <p className="text-lg font-bold">{filteredTransactions[0]?.technicianName || '-'}</p>
+                          <p className="text-lg font-bold">{selectedTx?.technicianName || '-'}</p>
                         </div>
                         <div>
                           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Quantity</p>
-                          <p className="text-lg font-bold">{filteredTransactions[0]?.quantity || 0} Units</p>
+                          <p className="text-lg font-bold">{selectedTx?.quantity || 0} Units</p>
                         </div>
                         <div>
                           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Date</p>
-                          <p className="text-lg font-bold">{filteredTransactions[0]?.timestamp?.toDate().toLocaleDateString() || '-'}</p>
+                          <p className="text-lg font-bold">{selectedTx?.timestamp?.toDate().toLocaleDateString() || '-'}</p>
                         </div>
                       </div>
 
                       <div className="pt-10 border-t border-white/10 flex items-center justify-between">
                         <div>
                           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Part Name</p>
-                          <p className="text-xl font-bold">{filteredTransactions[0]?.partName || '-'}</p>
+                          <p className="text-xl font-bold">{selectedTx?.partName || '-'}</p>
+                          {selectedTx?.verifiedBy && (
+                            <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mt-1">Verified by: {selectedTx.verifiedBy}</p>
+                          )}
                         </div>
-                        <button className="px-8 py-4 bg-brand-accent text-white rounded-2xl font-bold text-xs hover:bg-brand-accent/90 transition-all shadow-lg shadow-brand-accent/20">
-                          View Part Details
-                        </button>
+                        <div className="flex items-center gap-4">
+                          {selectedTx && selectedTx.status === 'open' && (
+                            <button 
+                              onClick={() => handleVerifyTransaction(selectedTx.id)}
+                              className="px-8 py-4 bg-black text-white rounded-2xl font-bold text-xs hover:bg-slate-800 transition-all shadow-lg shadow-black/10"
+                            >
+                              Verify Transaction
+                            </button>
+                          )}
+                          <button 
+                            onClick={() => selectedTx && handleViewPartDetails(selectedTx.partBarcode)}
+                            className="px-8 py-4 bg-brand-accent text-white rounded-2xl font-bold text-xs hover:bg-brand-accent/90 transition-all shadow-lg shadow-brand-accent/20"
+                          >
+                            View Part Details
+                          </button>
+                        </div>
                       </div>
                     </div>
                     {/* Decorative background */}
@@ -1558,6 +1657,94 @@ export default function App() {
           )}
         </AnimatePresence>
       </main>
+
+      {/* Part Details Modal */}
+      <AnimatePresence>
+        {showPartDetailsModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowPartDetailsModal(null)}
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-2xl bg-white rounded-[40px] shadow-2xl overflow-hidden border border-brand-border"
+            >
+              <div className="p-8 md:p-12">
+                <div className="flex items-center justify-between mb-10">
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-900">
+                      <Package className="w-7 h-7" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Part Information</p>
+                      <h3 className="text-3xl font-serif font-black tracking-tight text-slate-900">#{showPartDetailsModal.barcode}</h3>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setShowPartDetailsModal(null)}
+                    className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-400 hover:text-black hover:bg-slate-100 transition-all"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-10 mb-10">
+                  <div className="space-y-8">
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Part Name</p>
+                      <p className="text-xl font-bold text-slate-900">{showPartDetailsModal.name}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Current Stock</p>
+                      <div className="flex items-center gap-3">
+                        <p className="text-3xl font-serif font-black text-slate-900">{showPartDetailsModal.stock}</p>
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Units Available</span>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Verification Status</p>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                        <span className="text-xs font-bold text-slate-900 uppercase tracking-widest">System Verified</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-8">
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Location</p>
+                      <p className="text-lg font-bold text-slate-900">{showPartDetailsModal.location || 'Not specified'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Model / Type</p>
+                      <p className="text-lg font-bold text-slate-900">{showPartDetailsModal.model || 'Not specified'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Vendor</p>
+                      <p className="text-lg font-bold text-slate-900">{showPartDetailsModal.vendor || 'Not specified'}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-10 border-t border-slate-100 flex justify-end">
+                  <button 
+                    onClick={() => setShowPartDetailsModal(null)}
+                    className="px-10 py-4 bg-black text-white rounded-2xl font-bold text-xs hover:bg-slate-800 transition-all shadow-lg shadow-black/10"
+                  >
+                    Close Details
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* System Status Bar - Desktop Only */}
       <div className="hidden lg:flex fixed bottom-0 left-28 right-0 h-10 bg-white/80 backdrop-blur-md border-t border-brand-border items-center justify-between px-8 z-30 shadow-sm">
