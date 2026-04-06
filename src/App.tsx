@@ -212,9 +212,9 @@ export default function App() {
 
   const usbInputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-focus USB input when in scan view
+  // Auto-focus USB input when in form view
   useEffect(() => {
-    if (view === 'scan' && usbInputRef.current) {
+    if (view === 'form' && usbInputRef.current) {
       usbInputRef.current.focus();
     }
   }, [view]);
@@ -397,7 +397,7 @@ export default function App() {
     }
   };
 
-  const onScanSuccess = async (decodedText: string) => {
+  const onScanSuccess = React.useCallback(async (decodedText: string) => {
     const partRef = doc(db, 'spareparts', decodedText);
     const partSnap = await getDoc(partRef);
     
@@ -419,7 +419,7 @@ export default function App() {
 
     setScannedBarcode(decodedText);
     setView('form');
-  };
+  }, [selectedScanTeam]);
 
   const handleUsbScan = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && manualBarcode) {
@@ -434,7 +434,7 @@ export default function App() {
 
     const formData = new FormData(e.currentTarget);
     const technicianName = formData.get('technicianName') as string;
-    const team = formData.get('team') as string;
+    const team = selectedScanTeam;
     const quantity = parseInt(formData.get('quantity') as string) || 1;
     const notes = formData.get('notes') as string;
     const partName = (formData.get('name') as string || currentPart?.name || scannedBarcode) as string;
@@ -1354,153 +1354,104 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="bg-white rounded-[32px] shadow-xl border border-brand-border overflow-hidden flex flex-col md:flex-row min-h-[600px]">
-                {/* Left Side: Scanner & Part Info (Black) */}
-                <div className="md:w-2/5 bg-white border-r border-brand-border p-10 text-slate-900 flex flex-col justify-between relative overflow-hidden">
-                  <div className="relative z-10 space-y-8">
-                    <div>
-                      <h3 className="text-2xl font-serif font-black tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent mb-4">Scanner</h3>
-                      <div className="relative aspect-video bg-white/5 rounded-2xl overflow-hidden border border-white/10 group">
-                        {isCameraActive ? (
-                          <Scanner onScanSuccess={onScanSuccess} />
-                        ) : (
-                          <div className="w-full h-full flex flex-col items-center justify-center text-white/30 gap-4">
-                            <Camera className="w-10 h-10" />
-                            <p className="text-[10px] font-bold uppercase tracking-widest">Camera Inactive</p>
-                          </div>
-                        )}
-                        {isCameraActive && (
-                          <div className="absolute inset-0 pointer-events-none border-[20px] border-black/40">
-                            <div className="w-full h-full border border-white/20 relative">
-                              <div className="absolute -top-1 -left-1 w-4 h-4 border-t-2 border-l-2 border-brand-accent"></div>
-                              <div className="absolute -top-1 -right-1 w-4 h-4 border-t-2 border-r-2 border-brand-accent"></div>
-                              <div className="absolute -bottom-1 -left-1 w-4 h-4 border-b-2 border-l-2 border-brand-accent"></div>
-                              <div className="absolute -bottom-1 -right-1 w-4 h-4 border-b-2 border-r-2 border-brand-accent"></div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                      <button 
-                        onClick={() => setIsCameraActive(!isCameraActive)}
-                        className="mt-4 w-full py-3 bg-white/10 hover:bg-white/20 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2"
-                      >
-                        <Camera className="w-3 h-3" />
-                        {isCameraActive ? "Deactivate Camera" : "Activate Camera"}
-                      </button>
-                    </div>
-
-                    <div className="space-y-8 pt-4 border-t border-white/10">
-                      <div className="flex items-start gap-4">
-                        <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center shrink-0">
-                          <Scan className="w-5 h-5" />
-                        </div>
-                        <div className="flex-1">
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-white/50 mb-1">Barcode ID</p>
-                          <div className="relative group">
+              <div className="bg-white rounded-[32px] shadow-xl border border-brand-border overflow-hidden min-h-[600px]">
+                {/* Simplified Form (Full Width) */}
+                <form onSubmit={handleTransaction} className="w-full p-10 md:p-16 space-y-12 bg-white">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                    <div className="space-y-3 md:col-span-2">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Part Name</label>
+                      <div className="relative group">
+                        {!scannedBarcode ? (
+                          <div className="relative">
                             <input 
                               ref={usbInputRef}
                               type="text"
                               value={manualBarcode}
                               onChange={(e) => setManualBarcode(e.target.value)}
                               onKeyDown={handleUsbScan}
-                              placeholder="Scan or type barcode..."
-                              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white font-mono font-bold text-sm outline-none focus:border-brand-accent transition-all placeholder:text-white/20"
+                              placeholder="Tap here and scan barcode..."
+                              className="input-field w-full text-xl pr-12"
                             />
-                            <Search className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20 group-focus-within:text-brand-accent" />
+                            <Scan className="absolute right-4 top-1/2 -translate-y-1/2 w-6 h-6 text-slate-300 group-focus-within:text-brand-accent transition-colors" />
                           </div>
-                          {scannedBarcode && (
-                            <p className="mt-2 text-xs font-mono text-brand-accent font-bold">Active: {scannedBarcode}</p>
-                          )}
-                        </div>
+                        ) : (
+                          <div className="space-y-4">
+                            <div className="flex items-center justify-between p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                              <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 bg-white rounded-xl shadow-sm flex items-center justify-center text-brand-accent">
+                                  <Package className="w-6 h-6" />
+                                </div>
+                                <div>
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Scanned Barcode</p>
+                                  <p className="text-lg font-mono font-bold text-slate-900">{scannedBarcode}</p>
+                                </div>
+                              </div>
+                              <button 
+                                type="button"
+                                onClick={() => {
+                                  setScannedBarcode(null);
+                                  setCurrentPart(null);
+                                  setManualBarcode('');
+                                }}
+                                className="text-[10px] font-bold text-red-500 uppercase tracking-widest hover:text-red-600 transition-colors"
+                              >
+                                Reset Scan
+                              </button>
+                            </div>
+                            
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Confirm Part Name</label>
+                              {currentPart ? (
+                                <div className="p-5 bg-white border-2 border-slate-100 rounded-2xl">
+                                  <p className="text-xl font-bold text-slate-900">{currentPart.name}</p>
+                                </div>
+                              ) : (
+                                <input 
+                                  name="name"
+                                  required
+                                  placeholder="Enter part name for this new barcode"
+                                  className="input-field w-full text-xl"
+                                />
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
-
-                      {scannedBarcode && (
-                        <>
-                          {currentPart?.location && (
-                            <div className="flex items-start gap-4">
-                              <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center shrink-0">
-                                <Box className="w-5 h-5" />
-                              </div>
-                              <div>
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-white/50 mb-1">Location</p>
-                                <p className="text-xl font-bold tracking-tight">{currentPart.location}</p>
-                              </div>
-                            </div>
-                          )}
-
-                          {currentPart?.model && (
-                            <div className="flex items-start gap-4">
-                              <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center shrink-0">
-                                <Cpu className="w-5 h-5" />
-                              </div>
-                              <div>
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-white/50 mb-1">Model / Machine</p>
-                                <p className="text-xl font-bold tracking-tight">{currentPart.model}</p>
-                              </div>
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Decorative Circle */}
-                  <div className="absolute -bottom-20 -right-20 w-64 h-64 bg-white/5 rounded-full blur-3xl"></div>
-                </div>
-
-                {/* Right Side: Form (White) */}
-                <form onSubmit={handleTransaction} className="md:w-3/5 p-10 md:p-12 space-y-10 bg-white">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                    <div className="space-y-2 md:col-span-2">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Part Name</label>
-                      {currentPart ? (
-                        <div className="py-3 border-b-2 border-slate-100">
-                          <p className="text-xl font-bold text-slate-900">{currentPart.name}</p>
-                        </div>
-                      ) : (
-                        <input 
-                          name="name"
-                          required
-                          placeholder={scannedBarcode ? "Enter part name" : "Scan barcode first..."}
-                          disabled={!scannedBarcode}
-                          className="input-field w-full text-xl disabled:bg-slate-50 disabled:cursor-not-allowed"
-                        />
-                      )}
                     </div>
 
-                    {!currentPart && (
+                    {scannedBarcode && (
                       <>
-                        <div className="space-y-2">
+                        <div className="space-y-3">
                           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Location</label>
                           <input 
                             name="location"
+                            defaultValue={currentPart?.location || ''}
                             placeholder="Storage location"
-                            disabled={!scannedBarcode}
-                            className="input-field w-full disabled:bg-slate-50 disabled:cursor-not-allowed"
+                            className="input-field w-full"
                           />
                         </div>
-                        <div className="space-y-2">
+                        <div className="space-y-3">
                           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Model / Machine</label>
                           <input 
                             name="model"
+                            defaultValue={currentPart?.model || ''}
                             placeholder="Machine model"
-                            disabled={!scannedBarcode}
-                            className="input-field w-full disabled:bg-slate-50 disabled:cursor-not-allowed"
+                            className="input-field w-full"
                           />
                         </div>
-                        <div className="space-y-2 md:col-span-2">
+                        <div className="space-y-3 md:col-span-2">
                           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Vendor</label>
                           <input 
                             name="vendor"
+                            defaultValue={currentPart?.vendor || ''}
                             placeholder="Supplier name"
-                            disabled={!scannedBarcode}
-                            className="input-field w-full disabled:bg-slate-50 disabled:cursor-not-allowed"
+                            className="input-field w-full"
                           />
                         </div>
                       </>
                     )}
 
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Technician Name</label>
                       <input 
                         name="technicianName"
@@ -1510,22 +1461,7 @@ export default function App() {
                       />
                     </div>
 
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Team</label>
-                      <select 
-                        name="team"
-                        required
-                        defaultValue={selectedScanTeam || ""}
-                        className="input-field w-full appearance-none bg-white"
-                      >
-                        <option value="">Select Team</option>
-                        <option value="FCT">FCT</option>
-                        <option value="TESTER">TESTER</option>
-                        <option value="AUTOMATION">AUTOMATION</option>
-                      </select>
-                    </div>
-
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Quantity</label>
                       <input 
                         type="number"
@@ -1537,7 +1473,7 @@ export default function App() {
                       />
                     </div>
 
-                    <div className="space-y-2 md:col-span-2">
+                    <div className="space-y-3 md:col-span-2">
                       <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Additional Notes</label>
                       <textarea 
                         name="notes"
@@ -1548,18 +1484,31 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="pt-6">
+                  <div className="pt-10 border-t border-slate-100 flex items-center justify-between">
+                    <button 
+                      type="button"
+                      onClick={() => setView('team-select')}
+                      className="px-8 py-4 text-slate-400 font-bold text-xs uppercase tracking-widest hover:text-slate-900 transition-all"
+                    >
+                      Cancel
+                    </button>
                     <button 
                       type="submit"
                       disabled={isSubmitting || !scannedBarcode}
-                      className="btn-primary w-full md:w-auto min-w-[200px] flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-12 py-5 bg-black text-white rounded-2xl font-bold text-sm hover:bg-slate-800 transition-all shadow-xl shadow-black/10 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-3"
                     >
-                      {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <ArrowRightLeft className="w-5 h-5" />}
-                      Record Transaction
+                      {isSubmitting ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                          Processing...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="w-5 h-5" />
+                          Complete Transaction
+                        </>
+                      )}
                     </button>
-                    {!scannedBarcode && (
-                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-4 text-center md:text-left">Please scan a part first to enable submission</p>
-                    )}
                   </div>
                 </form>
               </div>
@@ -1881,10 +1830,10 @@ function Scanner({ onScanSuccess }: { onScanSuccess: (text: string) => void }) {
   }, [onScanSuccess]);
 
   return (
-    <div className="w-full h-full relative bg-white flex items-center justify-center">
+    <div className="w-full h-full relative bg-black flex items-center justify-center">
       <div id="reader" className="w-full h-full"></div>
       {error && (
-        <div className="absolute inset-0 z-20 flex items-center justify-center p-8 bg-white/90 backdrop-blur-md text-center">
+        <div className="absolute inset-0 z-20 flex items-center justify-center p-8 bg-black/90 backdrop-blur-md text-center">
           <div className="max-w-xs space-y-6">
             <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto">
               <AlertCircle className="w-8 h-8 text-red-500" />
