@@ -1,3 +1,4 @@
+// Spare Parts Form System - Updated Workflow: Team Selection -> Form with Integrated Scanner
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   doc, 
