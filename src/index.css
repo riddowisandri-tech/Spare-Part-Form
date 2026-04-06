@@ -7,11 +7,11 @@
   --font-serif: "Libre Baskerville", serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   
-  --color-brand-bg: #0B0E14;
-  --color-brand-surface: #151921;
-  --color-brand-accent: #CCFF00;
-  --color-brand-border: rgba(255, 255, 255, 0.05);
-  --color-brand-line: rgba(255, 255, 255, 0.03);
+  --color-brand-bg: #F5F5F7;
+  --color-brand-surface: #FFFFFF;
+  --color-brand-accent: #000000;
+  --color-brand-border: #E5E5E5;
+  --color-brand-line: rgba(0, 0, 0, 0.05);
   
   @keyframes gradient-flow {
     0% { background-position: 0% 50%; }
@@ -27,21 +27,21 @@
 
 @layer base {
   body {
-    @apply bg-brand-bg text-slate-300 antialiased selection:bg-brand-accent selection:text-black;
+    @apply bg-brand-bg text-slate-900 antialiased selection:bg-brand-accent selection:text-white;
     min-height: 100vh;
   }
 
   h1, h2, h3, h4, h5, h6 {
-    @apply font-display text-white font-bold tracking-tight;
+    @apply font-display text-slate-900 font-bold tracking-tight;
   }
 }
 
 .sidebar-item {
-  @apply relative w-full flex items-center justify-center py-4 text-slate-500 transition-all duration-300;
+  @apply relative w-full flex items-center justify-center py-4 text-slate-400 transition-all duration-300;
 }
 
 .sidebar-item.active {
-  @apply text-brand-accent bg-brand-bg;
+  @apply text-slate-900 bg-brand-bg;
   border-radius: 32px 0 0 32px;
 }
 
@@ -60,21 +60,21 @@
 }
 
 .glass-panel {
-  @apply bg-brand-surface rounded-[32px] shadow-2xl relative overflow-hidden border border-brand-border;
+  @apply bg-white rounded-[32px] shadow-sm relative overflow-hidden;
 }
 
 .btn-primary {
-  @apply bg-brand-accent text-black font-bold py-3 px-8 rounded-xl transition-all hover:opacity-90 active:scale-95 shadow-lg shadow-brand-accent/10 tracking-tight text-sm;
+  @apply bg-slate-900 text-white font-bold py-3 px-8 rounded-xl transition-all hover:bg-slate-800 active:scale-95 shadow-lg shadow-slate-900/10 tracking-tight text-sm;
 }
 
 .input-field {
-  @apply bg-white/5 border border-white/5 rounded-2xl px-6 py-3 focus:ring-2 focus:ring-brand-accent/20 outline-none transition-all text-white placeholder:text-slate-500 font-medium;
+  @apply bg-slate-100 border-none rounded-2xl px-6 py-3 focus:ring-2 focus:ring-black/5 outline-none transition-all text-slate-900 placeholder:text-slate-400 font-medium;
 }
 
 .bento-card {
-  @apply bg-brand-surface rounded-[32px] shadow-xl relative overflow-hidden p-8 flex flex-col justify-between transition-all hover:border-brand-accent/30 border border-brand-border;
+  @apply bg-white rounded-[32px] shadow-sm relative overflow-hidden p-8 flex flex-col justify-between transition-all hover:shadow-md;
 }
 
 .stat-card {
-  @apply bg-brand-surface rounded-3xl p-6 flex items-center justify-between border border-brand-border hover:border-brand-accent/20 transition-all;
+  @apply bg-white rounded-3xl p-6 flex items-center justify-between border border-slate-50 hover:shadow-md transition-all;
 }

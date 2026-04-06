@@ -101,18 +101,18 @@ const Logo = ({ dark = false }: { dark?: boolean }) => {
         <text x="10" y="85" fontFamily="'Arial Black', 'Arial', sans-serif" fontSize="90" fontWeight="900" fill={`url(#${gradientId})`}>s</text>
         
         {/* First 'i' */}
-        <rect x="65" y="40" width="18" height="45" fill="white" stroke={dark ? "#e2e8f0" : "none"} strokeWidth="1" />
+        <rect x="65" y="40" width="18" height="45" fill={dark ? "#000000" : "white"} stroke={dark ? "#e2e8f0" : "none"} strokeWidth="1" />
         <circle cx="74" cy="20" r="14" fill="#72B1E1" />
         
         {/* Second 'i' */}
-        <rect x="95" y="40" width="18" height="45" fill="white" stroke={dark ? "#e2e8f0" : "none"} strokeWidth="1" />
+        <rect x="95" y="40" width="18" height="45" fill={dark ? "#000000" : "white"} stroke={dark ? "#e2e8f0" : "none"} strokeWidth="1" />
         <circle cx="104" cy="105" r="14" fill="#F58220" />
         
         {/* 'x' */}
         <text x="125" y="85" fontFamily="'Arial Black', 'Arial', sans-serif" fontSize="90" fontWeight="900" fill={`url(#${gradientId})`}>x</text>
         
         {/* "We care." - Full tagline with proper spacing and visibility */}
-        <text x="110" y="130" fontFamily="'Libre Baskerville', serif" fontSize="28" fontStyle="italic" fontWeight="bold" fill={dark ? "#475569" : "white"}>
+        <text x="110" y="130" fontFamily="'Libre Baskerville', serif" fontSize="28" fontStyle="italic" fontWeight="bold" fill={dark ? "#000000" : "white"}>
           We care.
         </text>
       </svg>
@@ -522,12 +522,12 @@ export default function App() {
   });
 
   return (
-    <div className="min-h-screen bg-brand-bg text-slate-300 font-sans flex">
+    <div className="min-h-screen bg-brand-bg text-slate-900 font-sans flex">
       {/* Sidebar - Desktop */}
-      <aside className="hidden lg:flex w-28 flex-col bg-black sticky top-0 h-screen py-8 overflow-visible z-20">
+      <aside className="hidden lg:flex w-28 flex-col bg-white border-r border-brand-border sticky top-0 h-screen py-8 overflow-visible z-20">
         <div className="flex flex-col items-center gap-12 w-full overflow-visible">
           <div className="w-full px-2 transition-transform duration-500 hover:scale-110">
-            <Logo />
+            <Logo dark={true} />
           </div>
           
           <nav className="w-full flex flex-col items-end overflow-visible">
@@ -586,7 +586,7 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-900/40 backdrop-blur-sm"
+              className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/10 backdrop-blur-sm"
             >
               <motion.div 
                 initial={{ scale: 0.95, y: 10 }}
@@ -740,7 +740,7 @@ export default function App() {
                           "w-full py-4 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 shadow-lg",
                           passwordError 
                             ? "bg-red-500 text-white shadow-red-500/20" 
-                            : "bg-black text-white shadow-black/20 hover:bg-slate-800"
+                            : "bg-white border border-brand-border text-slate-900 shadow-black/5 hover:bg-slate-50"
                         )}
                       >
                         {passwordError ? "Try Again" : "Verify & Continue"}
@@ -1002,7 +1002,7 @@ export default function App() {
                 <div className="flex items-center gap-4">
                   <button 
                     onClick={() => setView('team-select')}
-                    className="px-6 py-3 bg-black text-white rounded-2xl font-bold text-xs hover:bg-slate-800 transition-all shadow-xl shadow-black/10 flex items-center gap-2"
+                    className="px-6 py-3 bg-white border border-brand-border text-slate-900 rounded-2xl font-bold text-xs hover:bg-slate-50 transition-all shadow-xl shadow-black/5 flex items-center gap-2"
                   >
                     <Scan className="w-4 h-4" />
                     Create Transaction
@@ -1081,7 +1081,7 @@ export default function App() {
                         className={cn(
                           "px-6 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all",
                           dashboardTeamTab === tab 
-                            ? "bg-black text-white shadow-lg shadow-black/10" 
+                            ? "bg-white border border-brand-border text-slate-900 shadow-lg shadow-black/5" 
                             : "text-slate-400 hover:text-slate-900 hover:bg-slate-50"
                         )}
                       >
@@ -1137,7 +1137,7 @@ export default function App() {
                   </div>
 
                   {/* Detail View (Mocked from image style) */}
-                  <div className="lg:col-span-8 bg-slate-900 rounded-[32px] p-10 text-white relative overflow-hidden">
+                  <div className="lg:col-span-8 bg-white border border-brand-border rounded-[32px] p-10 text-slate-900 relative overflow-hidden">
                     <div className="relative z-10">
                       <div className="flex items-center justify-between mb-12">
                         <div>
@@ -1257,7 +1257,7 @@ export default function App() {
 
               <div className="bg-white rounded-[32px] shadow-xl border border-brand-border overflow-hidden flex flex-col md:flex-row min-h-[600px]">
                 {/* Left Side: Scanner & Part Info (Black) */}
-                <div className="md:w-2/5 bg-black p-10 text-white flex flex-col justify-between relative overflow-hidden">
+                <div className="md:w-2/5 bg-white border-r border-brand-border p-10 text-slate-900 flex flex-col justify-between relative overflow-hidden">
                   <div className="relative z-10 space-y-8">
                     <div>
                       <h3 className="text-2xl font-serif font-black tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent mb-4">Scanner</h3>
@@ -1597,7 +1597,7 @@ export default function App() {
         
         <button 
           onClick={() => setView('team-select')} 
-          className="w-14 h-14 bg-black text-white rounded-2xl flex items-center justify-center -mt-10 shadow-lg shadow-black/30 active:scale-95 transition-all hover:scale-105"
+          className="w-14 h-14 bg-white border border-brand-border text-slate-900 rounded-2xl flex items-center justify-center -mt-10 shadow-lg shadow-black/5 active:scale-95 transition-all hover:scale-105"
         >
           <Scan className="w-7 h-7" />
         </button>
@@ -1694,10 +1694,10 @@ function Scanner({ onScanSuccess }: { onScanSuccess: (text: string) => void }) {
   }, [onScanSuccess]);
 
   return (
-    <div className="w-full h-full relative bg-black flex items-center justify-center">
+    <div className="w-full h-full relative bg-white flex items-center justify-center">
       <div id="reader" className="w-full h-full"></div>
       {error && (
-        <div className="absolute inset-0 z-20 flex items-center justify-center p-8 bg-slate-900/90 backdrop-blur-md text-center">
+        <div className="absolute inset-0 z-20 flex items-center justify-center p-8 bg-white/90 backdrop-blur-md text-center">
           <div className="max-w-xs space-y-6">
             <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto">
               <AlertCircle className="w-8 h-8 text-red-500" />
