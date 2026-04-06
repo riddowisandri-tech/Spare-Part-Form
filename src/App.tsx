@@ -58,6 +58,7 @@ interface SparePart {
   location?: string;
   model?: string;
   vendor?: string;
+  team?: string;
 }
 
 interface Transaction {
@@ -70,6 +71,14 @@ interface Transaction {
   notes: string;
   timestamp: any;
 }
+
+// --- Constants ---
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December"
+];
+
+const YEARS = Array.from({ length: 5 }, (_, i) => (new Date().getFullYear() - i).toString());
 
 // --- Components ---
 
@@ -111,7 +120,8 @@ const Logo = ({ dark = false }: { dark?: boolean }) => {
 };
 
 export default function App() {
-  const [view, setView] = useState<'home' | 'scan' | 'form' | 'history'>('home');
+  const [view, setView] = useState<'home' | 'scan' | 'form' | 'history' | 'team-select'>('home');
+  const [selectedScanTeam, setSelectedScanTeam] = useState<'FCT' | 'TESTER' | 'AUTOMATION' | null>(null);
   const [scannedBarcode, setScannedBarcode] = useState<string | null>(null);
   const [currentPart, setCurrentPart] = useState<SparePart | null>(null);
   const [parts, setParts] = useState<SparePart[]>([]);
@@ -119,7 +129,16 @@ export default function App() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [manualBarcode, setManualBarcode] = useState('');
-  const [stats, setStats] = useState({ totalParts: 0, todayTxs: 0 });
+  const [stats, setStats] = useState({ 
+    totalParts: 0, 
+    todayTxs: 0,
+    fctParts: 0,
+    testerParts: 0,
+    automationParts: 0
+  });
+  const [dashboardTeamTab, setDashboardTeamTab] = useState<'ALL' | 'FCT' | 'TESTER' | 'AUTOMATION'>('ALL');
+  const [filterMonth, setFilterMonth] = useState<string>(new Date().toLocaleString('default', { month: 'long' }));
+  const [filterYear, setFilterYear] = useState<string>(new Date().getFullYear().toString());
   const [showSettings, setShowSettings] = useState(false);
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
@@ -208,8 +227,20 @@ export default function App() {
 
     // Get total parts count & parts list
     const unsubscribeParts = onSnapshot(collection(db, 'spareparts'), (snap) => {
-      setStats(prev => ({ ...prev, totalParts: snap.size }));
-      setParts(snap.docs.map(d => ({ id: d.id, ...d.data() } as any)));
+      const partsList = snap.docs.map(d => ({ ...d.data() } as SparePart));
+      setParts(partsList);
+      
+      const fct = partsList.filter(p => !p.team || p.team === 'FCT').length;
+      const tester = partsList.filter(p => p.team === 'TESTER').length;
+      const automation = partsList.filter(p => p.team === 'AUTOMATION').length;
+      
+      setStats(prev => ({ 
+        ...prev, 
+        totalParts: snap.size,
+        fctParts: fct,
+        testerParts: tester,
+        automationParts: automation
+      }));
     });
 
     return () => {
@@ -359,17 +390,27 @@ export default function App() {
   };
 
   const onScanSuccess = async (decodedText: string) => {
-    setScannedBarcode(decodedText);
-    setView('form');
-    
     const partRef = doc(db, 'spareparts', decodedText);
     const partSnap = await getDoc(partRef);
     
     if (partSnap.exists()) {
-      setCurrentPart(partSnap.data() as SparePart);
+      const partData = partSnap.data() as SparePart;
+      // Check if team matches
+      if (partData.team && partData.team !== selectedScanTeam) {
+        setMessage({ 
+          type: 'error', 
+          text: `This part is registered for ${partData.team} Team. Please select the correct team.` 
+        });
+        setTimeout(() => setMessage(null), 5000);
+        return;
+      }
+      setCurrentPart(partData);
     } else {
       setCurrentPart(null);
     }
+
+    setScannedBarcode(decodedText);
+    setView('form');
   };
 
   const handleUsbScan = (e: React.KeyboardEvent) => {
@@ -433,7 +474,8 @@ export default function App() {
           model: model || '',
           vendor: vendor || '',
           description: '',
-          stock: 0
+          stock: 0,
+          team: team // Associate new part with the team that first takes it
         });
         setStats(prev => ({ ...prev, totalParts: prev.totalParts + 1 }));
       } else {
@@ -467,6 +509,17 @@ export default function App() {
     }
   };
 
+  const filteredTransactions = transactions.filter(tx => {
+    const date = tx.timestamp?.toDate();
+    if (!date) return false;
+    
+    const monthMatch = date.toLocaleString('default', { month: 'long' }) === filterMonth;
+    const yearMatch = date.getFullYear().toString() === filterYear;
+    const teamMatch = dashboardTeamTab === 'ALL' || tx.team === dashboardTeamTab;
+    
+    return monthMatch && yearMatch && teamMatch;
+  });
+
   return (
     <div className="min-h-screen bg-brand-bg text-slate-300 font-sans flex">
       {/* Sidebar - Desktop */}
@@ -486,8 +539,8 @@ export default function App() {
             </button>
             
             <button 
-              onClick={() => setView('scan')}
-              className={cn("sidebar-item", view === 'scan' && "active")}
+              onClick={() => setView('team-select')}
+              className={cn("sidebar-item", (view === 'scan' || view === 'team-select') && "active")}
               title="Scan Barcode"
             >
               <Scan className="w-6 h-6 relative z-10" />
@@ -940,153 +993,200 @@ export default function App() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="grid grid-cols-1 lg:grid-cols-12 gap-8"
+              className="space-y-8"
             >
-              {/* Left Column: Hero, Trending, Analytics */}
-              <div className="lg:col-span-8 space-y-8">
-                {/* Hero Section */}
-                <div className="bg-white rounded-[40px] p-12 relative overflow-hidden shadow-sm border border-brand-border">
-                  <div className="relative z-10">
-                    <h2 className="text-5xl md:text-6xl font-serif font-black tracking-tighter bg-gradient-to-r from-slate-900 to-slate-500 bg-clip-text text-transparent mb-6 pb-2">Hi Engineering Team.</h2>
-                    <p className="text-slate-500 text-lg leading-relaxed max-w-2xl">
-                      Please complete this spare parts form whenever you take any spare parts. Thank you for your cooperation.
-                    </p>
-                  </div>
-                  {/* Subtle background accent */}
-                  <div className="absolute -bottom-24 -right-24 w-80 h-80 bg-slate-50 rounded-full blur-3xl opacity-60"></div>
-                  <div className="absolute top-12 right-12 opacity-[0.03]">
-                    <Box className="w-64 h-64 rotate-12" />
-                  </div>
+              {/* Header Section */}
+              <div className="flex items-center justify-between">
+                <h2 className="text-5xl font-serif font-black tracking-tighter bg-gradient-to-r from-slate-900 to-slate-500 bg-clip-text text-transparent">Dashboard</h2>
+                <div className="flex items-center gap-4">
+                  <button 
+                    onClick={() => setView('team-select')}
+                    className="px-6 py-3 bg-black text-white rounded-2xl font-bold text-xs hover:bg-slate-800 transition-all shadow-xl shadow-black/10 flex items-center gap-2"
+                  >
+                    <Scan className="w-4 h-4" />
+                    Create Transaction
+                  </button>
                 </div>
+              </div>
 
-                {/* Recent Activity Section (Transactions) */}
-                <div className="space-y-6">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-3xl font-serif font-black tracking-tight bg-gradient-to-r from-slate-900 to-slate-500 bg-clip-text text-transparent">Recent Activity</h3>
-                    <button onClick={() => setView('history')} className="text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-black transition-colors">View All</button>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {transactions.slice(0, 3).map((tx, i) => (
-                      <div key={tx.id} className="bg-white rounded-[32px] p-6 shadow-sm border border-brand-border flex flex-col justify-between min-h-[200px] hover:shadow-md transition-all group">
-                        <div>
-                          <div className="flex items-center justify-between mb-4">
-                            <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", tx.type === 'in' ? "bg-emerald-50" : "bg-orange-50")}>
-                              {tx.type === 'in' ? <ArrowRightLeft className="w-5 h-5 text-emerald-500" /> : <ArrowRightLeft className="w-5 h-5 text-orange-500 rotate-180" />}
-                            </div>
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                              {tx.timestamp?.toDate().toLocaleDateString([], { month: 'short', day: 'numeric' })}
-                            </span>
-                          </div>
-                          <h4 className="font-bold text-slate-900 truncate mb-1">{tx.partBarcode}</h4>
-                          <p className="text-xs text-slate-500 font-medium">By {tx.technicianName}</p>
-                        </div>
-                        <div className="flex items-center justify-between mt-6">
-                          <div className="flex items-center gap-1">
-                            <span className="text-2xl font-black tracking-tighter text-slate-900">{tx.quantity || 1}</span>
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Units</span>
-                          </div>
-                          <div className={cn("px-2 py-1 rounded-lg text-[8px] font-bold uppercase tracking-widest", tx.type === 'in' ? "bg-emerald-100 text-emerald-600" : "bg-orange-100 text-orange-600")}>
-                            {tx.type === 'in' ? 'In' : 'Out'}
-                          </div>
-                        </div>
+              {/* Summary Cards Section */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {[
+                  { label: 'FCT Team Parts', value: stats.fctParts, icon: <Cpu className="w-6 h-6" />, color: 'bg-blue-500' },
+                  { label: 'Tester Team Parts', value: stats.testerParts, icon: <Zap className="w-6 h-6" />, color: 'bg-emerald-500' },
+                  { label: 'Automation Team Parts', value: stats.automationParts, icon: <Box className="w-6 h-6" />, color: 'bg-orange-500' }
+                ].map((stat, i) => (
+                  <div key={i} className="bg-white rounded-[40px] p-8 shadow-sm border border-brand-border hover:shadow-md transition-all group">
+                    <div className="flex items-center justify-between mb-6">
+                      <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-lg", stat.color)}>
+                        {stat.icon}
                       </div>
-                    ))}
-                    {transactions.length === 0 && (
-                      <div className="col-span-3 py-12 text-center bg-white rounded-[32px] border border-dashed border-slate-200 text-slate-400 text-sm italic">
-                        No recent activity recorded.
-                      </div>
-                    )}
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{stat.label}</span>
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                      <p className="text-5xl font-black tracking-tighter text-slate-900">{stat.value.toLocaleString()}</p>
+                      <span className="text-slate-400 font-bold text-sm">Parts</span>
+                    </div>
                   </div>
+                ))}
+              </div>
+
+              {/* Active Filters Section */}
+              <div className="bg-white rounded-[40px] p-8 shadow-sm border border-brand-border">
+                <div className="flex items-center gap-2 mb-6">
+                  <h3 className="text-sm font-bold text-slate-900">Active filters</h3>
+                  <div className="w-4 h-4 bg-slate-100 rounded-full flex items-center justify-center text-[10px] text-slate-400 font-bold">i</div>
                 </div>
-
-                {/* Analytics Section -> Transaction Activity */}
-                <div className="bg-white rounded-[40px] p-10 shadow-sm">
-                  <div className="flex items-center justify-between mb-10">
-                    <h3 className="text-3xl font-serif font-black tracking-tight bg-gradient-to-r from-slate-900 to-slate-500 bg-clip-text text-transparent">Inventory Activity</h3>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="relative group">
+                    <select 
+                      value={filterMonth}
+                      onChange={(e) => setFilterMonth(e.target.value)}
+                      className="w-full h-14 pl-6 pr-10 bg-slate-50 border border-slate-100 rounded-2xl appearance-none font-bold text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-black/5 transition-all"
+                    >
+                      {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                    <Search className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                   </div>
-                  <div className="h-48 w-full relative">
-                    <svg viewBox="0 0 800 200" className="w-full h-full overflow-visible">
-                      <defs>
-                        <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="black" stopOpacity="0.1" />
-                          <stop offset="100%" stopColor="black" stopOpacity="0" />
-                        </linearGradient>
-                      </defs>
-                      {/* Grid Lines */}
-                      {[0, 50, 100, 150, 200].map((y) => (
-                        <line key={y} x1="0" y1={y} x2="800" y2={y} stroke="#f1f5f9" strokeWidth="1" />
-                      ))}
-                      {/* Area Fill */}
-                      <path 
-                        d="M0,180 Q150,120 300,150 T600,110 T800,140 L800,200 L0,200 Z" 
-                        fill="url(#chartGradient)"
-                      />
-                      {/* Main Line */}
-                      <path 
-                        d="M0,180 Q150,120 300,150 T600,110 T800,140" 
-                        fill="none" 
-                        stroke="black" 
-                        strokeWidth="4" 
-                        strokeLinecap="round"
-                        className="drop-shadow-sm"
-                      />
-                      <circle cx="300" cy="150" r="5" fill="black" stroke="white" strokeWidth="2" />
-                      <circle cx="600" cy="110" r="5" fill="black" stroke="white" strokeWidth="2" />
-                      {/* Tooltip */}
-                      <g transform="translate(280, 110)">
-                        <rect width="40" height="24" rx="8" fill="black" />
-                        <text x="20" y="16" textAnchor="middle" fill="white" fontSize="10" fontWeight="bold">{stats.todayTxs}</text>
-                      </g>
-                    </svg>
+                  <div className="relative group">
+                    <select 
+                      value={filterYear}
+                      onChange={(e) => setFilterYear(e.target.value)}
+                      className="w-full h-14 pl-6 pr-10 bg-slate-50 border border-slate-100 rounded-2xl appearance-none font-bold text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-black/5 transition-all"
+                    >
+                      {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                    <Search className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                  </div>
+                  <div className="md:col-span-2 relative">
+                    <input 
+                      type="text"
+                      placeholder="Search transactions..."
+                      className="w-full h-14 pl-12 pr-6 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-black/5 transition-all"
+                    />
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                   </div>
                 </div>
               </div>
 
-              {/* Right Column: CTA, Stats */}
-              <div className="lg:col-span-4 space-y-8">
-                {/* CTA Card -> Quick Scan */}
-                <div className="bg-white rounded-[40px] p-10 shadow-sm text-center relative overflow-hidden group">
-                  <div className="absolute top-0 left-1/2 -translate-x-1/2 opacity-5 group-hover:scale-110 transition-transform duration-500">
-                    <Scan className="w-32 h-32" />
+              {/* Recent Activity Section */}
+              <div className="bg-white rounded-[40px] shadow-sm border border-brand-border overflow-hidden">
+                <div className="p-8 border-b border-slate-50 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    {['ALL', 'FCT', 'TESTER', 'AUTOMATION'].map((tab) => (
+                      <button 
+                        key={tab}
+                        onClick={() => setDashboardTeamTab(tab as any)}
+                        className={cn(
+                          "px-6 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all",
+                          dashboardTeamTab === tab 
+                            ? "bg-black text-white shadow-lg shadow-black/10" 
+                            : "text-slate-400 hover:text-slate-900 hover:bg-slate-50"
+                        )}
+                      >
+                        {tab}
+                      </button>
+                    ))}
                   </div>
-                  <div className="relative z-10">
-                    <p className="text-slate-500 text-sm mb-6 px-4">
-                      Pick up spare parts? <span className="font-bold text-slate-900">Quick Scan</span> to record transactions.
-                    </p>
-                    <button 
-                      onClick={() => setView('scan')}
-                      className="w-full py-4 bg-black text-white rounded-2xl font-bold text-sm hover:bg-slate-800 transition-all shadow-xl shadow-black/10"
-                    >
-                      Open Scanner
-                    </button>
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-400">
+                      <LayoutDashboard className="w-4 h-4" />
+                    </div>
+                    <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-400">
+                      <Settings className="w-4 h-4" />
+                    </div>
                   </div>
                 </div>
 
-                {/* Stats Cards */}
-                <div className="grid grid-cols-2 gap-4">
-                  {[
-                    { label: 'Registered Part', value: stats.totalParts, icon: <Box className="w-5 h-5" />, color: 'bg-slate-50' },
-                    { label: 'Today', value: stats.todayTxs, icon: <ArrowRightLeft className="w-5 h-5" />, color: 'bg-slate-50' },
-                    { label: 'Total Activity', value: transactions.length, icon: <History className="w-5 h-5" />, color: 'bg-slate-50', span: 'col-span-2' }
-                  ].map((stat, i) => (
-                    <div key={i} className={cn("bg-white rounded-[32px] p-6 shadow-sm border border-brand-border hover:bg-slate-50 transition-all group", stat.span)}>
-                      <div className="flex items-center gap-4 mb-4">
-                        <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", stat.color)}>
-                          {stat.icon}
+                <div className="p-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
+                  {/* List View */}
+                  <div className="lg:col-span-4 space-y-4">
+                    <h4 className="text-xs font-bold text-slate-900 uppercase tracking-widest mb-6">Recent Activity</h4>
+                    <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+                      {filteredTransactions.map((tx) => (
+                        <div key={tx.id} className="flex items-center justify-between p-4 rounded-2xl hover:bg-slate-50 transition-all group cursor-pointer border border-transparent hover:border-slate-100">
+                          <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-900 font-bold text-xs uppercase">
+                              {tx.technicianName.charAt(0)}
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold text-slate-900">#{tx.partBarcode.slice(-6)}</p>
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{tx.timestamp?.toDate().toLocaleDateString([], { day: 'numeric', month: 'short' })}</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm font-black text-slate-900">{tx.quantity} Units</p>
+                            <span className={cn(
+                              "text-[8px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md",
+                              tx.team === 'FCT' ? "bg-blue-50 text-blue-600" :
+                              tx.team === 'TESTER' ? "bg-emerald-50 text-emerald-600" :
+                              "bg-orange-50 text-orange-600"
+                            )}>
+                              {tx.team}
+                            </span>
+                          </div>
                         </div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{stat.label}</p>
-                      </div>
-                      <p className="text-3xl font-black tracking-tighter text-slate-900">{stat.value}</p>
+                      ))}
+                      {filteredTransactions.length === 0 && (
+                        <div className="py-12 text-center text-slate-400 text-xs italic">
+                          No activity for this period.
+                        </div>
+                      )}
                     </div>
-                  ))}
+                  </div>
+
+                  {/* Detail View (Mocked from image style) */}
+                  <div className="lg:col-span-8 bg-slate-900 rounded-[32px] p-10 text-white relative overflow-hidden">
+                    <div className="relative z-10">
+                      <div className="flex items-center justify-between mb-12">
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Transaction Details</p>
+                          <h3 className="text-4xl font-serif font-black tracking-tighter">
+                            {filteredTransactions[0] ? `#${filteredTransactions[0].partBarcode}` : 'No Data'}
+                          </h3>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Team</p>
+                          <p className="text-2xl font-serif font-black">{filteredTransactions[0]?.team || '-'}</p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-8 mb-12">
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Technician</p>
+                          <p className="text-lg font-bold">{filteredTransactions[0]?.technicianName || '-'}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Quantity</p>
+                          <p className="text-lg font-bold">{filteredTransactions[0]?.quantity || 0} Units</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Date</p>
+                          <p className="text-lg font-bold">{filteredTransactions[0]?.timestamp?.toDate().toLocaleDateString() || '-'}</p>
+                        </div>
+                      </div>
+
+                      <div className="pt-10 border-t border-white/10 flex items-center justify-between">
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Part Name</p>
+                          <p className="text-xl font-bold">{filteredTransactions[0]?.partName || '-'}</p>
+                        </div>
+                        <button className="px-8 py-4 bg-brand-accent text-white rounded-2xl font-bold text-xs hover:bg-brand-accent/90 transition-all shadow-lg shadow-brand-accent/20">
+                          View Part Details
+                        </button>
+                      </div>
+                    </div>
+                    {/* Decorative background */}
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+                  </div>
                 </div>
               </div>
             </motion.div>
           )}
 
-          {view === 'scan' && (
+          {view === 'team-select' && (
             <motion.div 
-              key="scan"
+              key="team-select"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 20 }}
@@ -1099,89 +1199,41 @@ export default function App() {
                   </div>
                   <span className="font-bold uppercase tracking-widest text-[10px]">Back to Dashboard</span>
                 </button>
-                <h2 className="text-3xl font-serif font-black tracking-tight bg-gradient-to-r from-slate-900 to-slate-500 bg-clip-text text-transparent">Scanner <span className="text-slate-400">Active</span></h2>
+                <h2 className="text-3xl font-serif font-black tracking-tight bg-gradient-to-r from-slate-900 to-slate-500 bg-clip-text text-transparent">Select <span className="text-slate-400">Team</span></h2>
               </div>
 
-              <div className="bg-white rounded-3xl p-10 space-y-10 shadow-sm border border-brand-border">
-                <div className="relative max-w-2xl mx-auto group">
-                  <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-black transition-colors" />
-                  <input 
-                    ref={usbInputRef}
-                    type="text"
-                    value={manualBarcode}
-                    onChange={(e) => setManualBarcode(e.target.value)}
-                    onKeyDown={handleUsbScan}
-                    placeholder="Or type barcode manually..."
-                    className="w-full bg-slate-50 border border-brand-border rounded-2xl pl-16 pr-6 py-5 text-slate-900 font-mono font-bold text-lg outline-none focus:ring-4 focus:ring-black/5 focus:border-black transition-all placeholder:text-slate-300"
-                    autoFocus
-                  />
-                </div>
-
-                <div className="relative aspect-video bg-slate-50 rounded-3xl overflow-hidden border-4 border-white shadow-lg group">
-                  {isCameraActive ? (
-                    <Scanner onScanSuccess={onScanSuccess} />
-                  ) : (
-                    <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 gap-4 bg-slate-900/5">
-                      <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-sm border border-slate-100">
-                        <Camera className="w-10 h-10 text-slate-300" />
-                      </div>
-                      <div className="text-center">
-                        <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-1">Camera Inactive</p>
-                        <p className="text-[10px] text-slate-300 font-medium">Click "Camera Mode" below to activate</p>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* Scanner Overlay UI */}
-                  {isCameraActive && (
-                    <div className="absolute inset-0 pointer-events-none border-[40px] border-white/40">
-                      <div className="w-full h-full border-2 border-slate-100 relative">
-                        {/* Corner Accents */}
-                        <div className="absolute -top-1 -left-1 w-8 h-8 border-t-4 border-l-4 border-black rounded-tl-lg"></div>
-                        <div className="absolute -top-1 -right-1 w-8 h-8 border-t-4 border-r-4 border-black rounded-tr-lg"></div>
-                        <div className="absolute -bottom-1 -left-1 w-8 h-8 border-b-4 border-l-4 border-black rounded-bl-lg"></div>
-                        <div className="absolute -bottom-1 -right-1 w-8 h-8 border-b-4 border-r-4 border-black rounded-br-lg"></div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                {[
+                  { name: 'FCT', icon: <Cpu className="w-8 h-8" />, color: 'bg-blue-500', desc: 'Functional Circuit Tester' },
+                  { name: 'TESTER', icon: <Zap className="w-8 h-8" />, color: 'bg-emerald-500', desc: 'Tester Equipment' },
+                  { name: 'AUTOMATION', icon: <Box className="w-8 h-8" />, color: 'bg-orange-500', desc: 'Automation Systems' }
+                ].map((team) => (
                   <button 
-                    onClick={() => setIsCameraActive(!isCameraActive)}
-                    className={cn(
-                      "p-6 rounded-2xl border transition-all text-left group relative overflow-hidden",
-                      isCameraActive 
-                        ? "bg-black border-black text-white shadow-lg shadow-black/10" 
-                        : "bg-slate-50 border-brand-border hover:bg-white hover:border-black"
-                    )}
+                    key={team.name}
+                    onClick={() => {
+                      setSelectedScanTeam(team.name as any);
+                      setScannedBarcode(null);
+                      setCurrentPart(null);
+                      setView('form');
+                      setIsCameraActive(true);
+                    }}
+                    className="bg-white rounded-[40px] p-10 shadow-sm border border-brand-border hover:shadow-xl hover:-translate-y-2 transition-all group text-center"
                   >
-                    <div className="relative z-10 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <Camera className={cn("w-4 h-4", isCameraActive ? "text-white" : "text-black")} />
-                        <span className="text-xs font-bold uppercase tracking-widest">Camera Mode</span>
-                        {isCameraActive && (
-                          <span className="ml-auto flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                        )}
-                      </div>
-                      <p className={cn("text-sm leading-relaxed", isCameraActive ? "text-white/70" : "text-slate-500")}>
-                        {isCameraActive ? "Camera is active. Position the barcode within the frame." : "Click to activate camera for automatic detection."}
-                      </p>
+                    <div className={cn("w-20 h-20 rounded-3xl flex items-center justify-center text-white shadow-lg mx-auto mb-6 transition-transform group-hover:scale-110", team.color)}>
+                      {team.icon}
+                    </div>
+                    <h3 className="text-2xl font-black tracking-tighter text-slate-900 mb-2">{team.name}</h3>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">{team.desc}</p>
+                    <div className="w-full py-3 bg-slate-50 rounded-xl text-[10px] font-bold uppercase tracking-widest text-slate-400 group-hover:bg-black group-hover:text-white transition-all">
+                      Select Team
                     </div>
                   </button>
-                  <div className="p-6 bg-slate-50 rounded-2xl border border-brand-border space-y-2">
-                    <div className="flex items-center gap-2 text-black">
-                      <Zap className="w-4 h-4" />
-                      <span className="text-xs font-bold uppercase tracking-widest">USB Scanner</span>
-                    </div>
-                    <p className="text-slate-500 text-sm leading-relaxed">External scanners are supported. Simply scan and the system will redirect.</p>
-                  </div>
-                </div>
+                ))}
               </div>
             </motion.div>
           )}
 
-          {view === 'form' && scannedBarcode && (
+          {view === 'form' && (
             <motion.div 
               key="form"
               initial={{ opacity: 0, scale: 0.95 }}
@@ -1190,60 +1242,104 @@ export default function App() {
               className="max-w-5xl mx-auto space-y-8"
             >
               <div className="flex items-center justify-between">
-                <button onClick={() => setView('scan')} className="flex items-center gap-3 text-slate-500 hover:text-black transition-all group">
+                <button onClick={() => setView('team-select')} className="flex items-center gap-3 text-slate-500 hover:text-black transition-all group">
                   <div className="w-10 h-10 rounded-xl border border-slate-200 flex items-center justify-center group-hover:border-black bg-white shadow-sm">
                     <ChevronLeft className="w-5 h-5" />
                   </div>
-                  <span className="font-bold uppercase tracking-widest text-[10px]">Back to Scan</span>
+                  <span className="font-bold uppercase tracking-widest text-[10px]">Change Team</span>
                 </button>
                 <div className="text-right">
                   <h2 className="text-3xl font-serif font-black tracking-tight bg-gradient-to-r from-slate-900 to-slate-500 bg-clip-text text-transparent">Record Transaction</h2>
-                  <p className="text-xs text-slate-400 font-medium mt-1">Update inventory stock levels in real-time</p>
+                  <p className="text-xs text-slate-400 font-medium mt-1">Update inventory stock levels for <span className="text-black font-bold uppercase">{selectedScanTeam} Team</span></p>
                 </div>
               </div>
 
               <div className="bg-white rounded-[32px] shadow-xl border border-brand-border overflow-hidden flex flex-col md:flex-row min-h-[600px]">
-                {/* Left Side: Part Info (Black) */}
+                {/* Left Side: Scanner & Part Info (Black) */}
                 <div className="md:w-2/5 bg-black p-10 text-white flex flex-col justify-between relative overflow-hidden">
-                  <div className="relative z-10">
-                    <h3 className="text-2xl font-serif font-black tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent mb-4">Part Information</h3>
-                    <p className="text-white/70 text-sm leading-relaxed mb-10">
-                      Review the scanned part details before recording the transaction. Ensure all data is accurate.
-                    </p>
+                  <div className="relative z-10 space-y-8">
+                    <div>
+                      <h3 className="text-2xl font-serif font-black tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent mb-4">Scanner</h3>
+                      <div className="relative aspect-video bg-white/5 rounded-2xl overflow-hidden border border-white/10 group">
+                        {isCameraActive ? (
+                          <Scanner onScanSuccess={onScanSuccess} />
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center text-white/30 gap-4">
+                            <Camera className="w-10 h-10" />
+                            <p className="text-[10px] font-bold uppercase tracking-widest">Camera Inactive</p>
+                          </div>
+                        )}
+                        {isCameraActive && (
+                          <div className="absolute inset-0 pointer-events-none border-[20px] border-black/40">
+                            <div className="w-full h-full border border-white/20 relative">
+                              <div className="absolute -top-1 -left-1 w-4 h-4 border-t-2 border-l-2 border-brand-accent"></div>
+                              <div className="absolute -top-1 -right-1 w-4 h-4 border-t-2 border-r-2 border-brand-accent"></div>
+                              <div className="absolute -bottom-1 -left-1 w-4 h-4 border-b-2 border-l-2 border-brand-accent"></div>
+                              <div className="absolute -bottom-1 -right-1 w-4 h-4 border-b-2 border-r-2 border-brand-accent"></div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <button 
+                        onClick={() => setIsCameraActive(!isCameraActive)}
+                        className="mt-4 w-full py-3 bg-white/10 hover:bg-white/20 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                      >
+                        <Camera className="w-3 h-3" />
+                        {isCameraActive ? "Deactivate Camera" : "Activate Camera"}
+                      </button>
+                    </div>
 
-                    <div className="space-y-10">
+                    <div className="space-y-8 pt-4 border-t border-white/10">
                       <div className="flex items-start gap-4">
                         <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center shrink-0">
                           <Scan className="w-5 h-5" />
                         </div>
-                        <div>
+                        <div className="flex-1">
                           <p className="text-[10px] font-bold uppercase tracking-widest text-white/50 mb-1">Barcode ID</p>
-                          <p className="text-xl font-mono font-bold tracking-tight">{scannedBarcode}</p>
+                          <div className="relative group">
+                            <input 
+                              ref={usbInputRef}
+                              type="text"
+                              value={manualBarcode}
+                              onChange={(e) => setManualBarcode(e.target.value)}
+                              onKeyDown={handleUsbScan}
+                              placeholder="Scan or type barcode..."
+                              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white font-mono font-bold text-sm outline-none focus:border-brand-accent transition-all placeholder:text-white/20"
+                            />
+                            <Search className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20 group-focus-within:text-brand-accent" />
+                          </div>
+                          {scannedBarcode && (
+                            <p className="mt-2 text-xs font-mono text-brand-accent font-bold">Active: {scannedBarcode}</p>
+                          )}
                         </div>
                       </div>
 
-                      {currentPart?.location && (
-                        <div className="flex items-start gap-4">
-                          <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center shrink-0">
-                            <Box className="w-5 h-5" />
-                          </div>
-                          <div>
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-white/50 mb-1">Location</p>
-                            <p className="text-xl font-bold tracking-tight">{currentPart.location}</p>
-                          </div>
-                        </div>
-                      )}
+                      {scannedBarcode && (
+                        <>
+                          {currentPart?.location && (
+                            <div className="flex items-start gap-4">
+                              <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center shrink-0">
+                                <Box className="w-5 h-5" />
+                              </div>
+                              <div>
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-white/50 mb-1">Location</p>
+                                <p className="text-xl font-bold tracking-tight">{currentPart.location}</p>
+                              </div>
+                            </div>
+                          )}
 
-                      {currentPart?.model && (
-                        <div className="flex items-start gap-4">
-                          <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center shrink-0">
-                            <Cpu className="w-5 h-5" />
-                          </div>
-                          <div>
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-white/50 mb-1">Model / Machine</p>
-                            <p className="text-xl font-bold tracking-tight">{currentPart.model}</p>
-                          </div>
-                        </div>
+                          {currentPart?.model && (
+                            <div className="flex items-start gap-4">
+                              <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center shrink-0">
+                                <Cpu className="w-5 h-5" />
+                              </div>
+                              <div>
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-white/50 mb-1">Model / Machine</p>
+                                <p className="text-xl font-bold tracking-tight">{currentPart.model}</p>
+                              </div>
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
@@ -1265,8 +1361,9 @@ export default function App() {
                         <input 
                           name="name"
                           required
-                          placeholder="Enter part name"
-                          className="input-field w-full text-xl"
+                          placeholder={scannedBarcode ? "Enter part name" : "Scan barcode first..."}
+                          disabled={!scannedBarcode}
+                          className="input-field w-full text-xl disabled:bg-slate-50 disabled:cursor-not-allowed"
                         />
                       )}
                     </div>
@@ -1278,7 +1375,8 @@ export default function App() {
                           <input 
                             name="location"
                             placeholder="Storage location"
-                            className="input-field w-full"
+                            disabled={!scannedBarcode}
+                            className="input-field w-full disabled:bg-slate-50 disabled:cursor-not-allowed"
                           />
                         </div>
                         <div className="space-y-2">
@@ -1286,7 +1384,8 @@ export default function App() {
                           <input 
                             name="model"
                             placeholder="Machine model"
-                            className="input-field w-full"
+                            disabled={!scannedBarcode}
+                            className="input-field w-full disabled:bg-slate-50 disabled:cursor-not-allowed"
                           />
                         </div>
                         <div className="space-y-2 md:col-span-2">
@@ -1294,14 +1393,15 @@ export default function App() {
                           <input 
                             name="vendor"
                             placeholder="Supplier name"
-                            className="input-field w-full"
+                            disabled={!scannedBarcode}
+                            className="input-field w-full disabled:bg-slate-50 disabled:cursor-not-allowed"
                           />
                         </div>
                       </>
                     )}
 
                     <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Name</label>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Technician Name</label>
                       <input 
                         name="technicianName"
                         required
@@ -1315,6 +1415,7 @@ export default function App() {
                       <select 
                         name="team"
                         required
+                        defaultValue={selectedScanTeam || ""}
                         className="input-field w-full appearance-none bg-white"
                       >
                         <option value="">Select Team</option>
@@ -1350,12 +1451,15 @@ export default function App() {
                   <div className="pt-6">
                     <button 
                       type="submit"
-                      disabled={isSubmitting}
-                      className="btn-primary w-full md:w-auto min-w-[200px] flex items-center justify-center gap-3"
+                      disabled={isSubmitting || !scannedBarcode}
+                      className="btn-primary w-full md:w-auto min-w-[200px] flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <ArrowRightLeft className="w-5 h-5" />}
                       Record Transaction
                     </button>
+                    {!scannedBarcode && (
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-4 text-center md:text-left">Please scan a part first to enable submission</p>
+                    )}
                   </div>
                 </form>
               </div>
@@ -1491,7 +1595,7 @@ export default function App() {
         </button>
         
         <button 
-          onClick={() => setView('scan')} 
+          onClick={() => setView('team-select')} 
           className="w-14 h-14 bg-black text-white rounded-2xl flex items-center justify-center -mt-10 shadow-lg shadow-black/30 active:scale-95 transition-all hover:scale-105"
         >
           <Scan className="w-7 h-7" />
