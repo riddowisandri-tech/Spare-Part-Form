@@ -41,7 +41,10 @@ import {
   LayoutDashboard,
   Download,
   Users,
-  Trash2
+  Trash2,
+  LogIn,
+  LogOut,
+  ShieldCheck
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -177,6 +180,7 @@ export default function App() {
     vendor?: string;
   } | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [loggedInAdmin, setLoggedInAdmin] = useState<AdminAccount | null>(null);
   const [adminUsername, setAdminUsername] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
   const [adminAccounts, setAdminAccounts] = useState<AdminAccount[]>([]);
@@ -208,7 +212,11 @@ export default function App() {
   }, []);
 
   const handleAdminAction = (title: string, action: () => void) => {
-    setShowPasswordPrompt({ title, action });
+    if (loggedInAdmin) {
+      action();
+    } else {
+      setShowPasswordPrompt({ title, action });
+    }
   };
 
   const verifyPassword = async () => {
@@ -220,6 +228,7 @@ export default function App() {
     
     if (account) {
       const action = showPasswordPrompt?.action;
+      setLoggedInAdmin(account);
       setShowPasswordPrompt(null);
       setAdminUsername('');
       setAdminPassword('');
@@ -622,7 +631,7 @@ export default function App() {
   };
 
   const handleVerifyTransaction = async (txId: string) => {
-    const account = adminAccounts.find(acc => acc.username === adminUsername && acc.password === adminPassword);
+    const account = loggedInAdmin || adminAccounts.find(acc => acc.username === adminUsername && acc.password === adminPassword);
     
     if (!account) {
       setMessage({ type: 'error', text: 'Invalid Username or Password!' });
@@ -638,8 +647,10 @@ export default function App() {
       });
       setMessage({ type: 'success', text: `Transaction verified by ${account.name}.` });
       setShowVerifierModal(null);
-      setAdminUsername('');
-      setAdminPassword('');
+      if (!loggedInAdmin) {
+        setAdminUsername('');
+        setAdminPassword('');
+      }
     } catch (error) {
       console.error("Verification failed", error);
       setMessage({ type: 'error', text: 'Failed to verify transaction.' });
@@ -689,6 +700,16 @@ export default function App() {
             >
               <Settings className="w-6 h-6 relative z-10" />
             </button>
+
+            {loggedInAdmin && (
+              <button 
+                onClick={() => setLoggedInAdmin(null)}
+                className="sidebar-item text-red-500 hover:bg-red-500/10"
+                title="Logout Admin"
+              >
+                <LogOut className="w-6 h-6 relative z-10" />
+              </button>
+            )}
           </nav>
         </div>
       </aside>
@@ -699,10 +720,16 @@ export default function App() {
           <div className="lg:hidden w-48 md:w-56 flex items-center justify-center">
             <Logo dark={true} />
           </div>
-          <div className="text-center md:text-left flex-1">
+          <div className="text-center md:text-left flex-1 flex flex-col md:flex-row md:items-center gap-4">
             <h1 className="text-3xl md:text-4xl lg:text-5xl font-serif font-black tracking-tighter bg-gradient-to-r from-slate-900 to-slate-500 bg-clip-text text-transparent drop-shadow-2xl leading-tight">
               Spare Parts Form System
             </h1>
+            {loggedInAdmin && (
+              <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 border border-emerald-100 rounded-2xl animate-in fade-in slide-in-from-left-4">
+                <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                <span className="text-xs font-bold text-emerald-700">Admin: {loggedInAdmin.name}</span>
+              </div>
+            )}
           </div>
         </header>
 
@@ -2026,42 +2053,56 @@ export default function App() {
                 </div>
 
                 <p className="text-sm text-slate-500 mb-8">
-                  Please enter your admin credentials to approve this spare part withdrawal.
+                  {loggedInAdmin 
+                    ? `Confirm authorization as ${loggedInAdmin.name}.`
+                    : "Please enter your admin credentials to approve this spare part withdrawal."}
                 </p>
 
                 <div className="space-y-6">
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Username</label>
-                      <input
-                        type="text"
-                        value={adminUsername}
-                        onChange={(e) => setAdminUsername(e.target.value)}
-                        placeholder="Username"
-                        className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
-                        autoFocus
-                      />
+                  {!loggedInAdmin ? (
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Username</label>
+                        <input
+                          type="text"
+                          value={adminUsername}
+                          onChange={(e) => setAdminUsername(e.target.value)}
+                          placeholder="Username"
+                          className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                          autoFocus
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Password</label>
+                        <input
+                          type="password"
+                          value={adminPassword}
+                          onChange={(e) => setAdminPassword(e.target.value)}
+                          placeholder="Password"
+                          className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleVerifyTransaction(showVerifierModal);
+                          }}
+                        />
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Password</label>
-                      <input
-                        type="password"
-                        value={adminPassword}
-                        onChange={(e) => setAdminPassword(e.target.value)}
-                        placeholder="Password"
-                        className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleVerifyTransaction(showVerifierModal);
-                        }}
-                      />
+                  ) : (
+                    <div className="p-6 bg-emerald-50 border border-emerald-100 rounded-3xl flex items-center gap-4">
+                      <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm">
+                        <ShieldCheck className="w-6 h-6 text-emerald-600" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-emerald-800">{loggedInAdmin.name}</p>
+                        <p className="text-[10px] text-emerald-600 uppercase tracking-widest font-medium">Logged in as Admin</p>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   <button
                     onClick={() => handleVerifyTransaction(showVerifierModal)}
                     className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-bold text-xs hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 active:scale-[0.98]"
                   >
-                    Confirm Authorization
+                    {loggedInAdmin ? "Confirm Authorization" : "Login & Authorize"}
                   </button>
                 </div>
 
