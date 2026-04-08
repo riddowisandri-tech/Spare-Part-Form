@@ -19,6 +19,18 @@ import { db } from './firebase';
 import { Html5QrcodeScanner, Html5Qrcode } from 'html5-qrcode';
 import * as XLSX from 'xlsx';
 import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer, 
+  Cell,
+  PieChart,
+  Pie
+} from 'recharts';
+import { 
   Scan, 
   Package, 
   History, 
@@ -107,26 +119,56 @@ const YEARS = Array.from({ length: 5 }, (_, i) => (new Date().getFullYear() - i)
 // --- Components ---
 
 const Logo = ({ dark = false, className = "" }: { dark?: boolean; className?: string }) => {
-  const textColor = dark ? "#000000" : "#FFFFFF";
+  const textColor = dark ? "#1A1A1A" : "#FFFFFF";
+  const blueColor = "#1E5FA9";
+  const orangeColor = "#F58220";
+
   return (
-    <div className={cn("w-full flex items-center justify-center py-2", className)}>
-      <svg viewBox="0 0 260 140" className="w-full h-auto max-h-24 overflow-visible drop-shadow-lg">
+    <div className={cn("flex items-center justify-center", className)}>
+      <svg viewBox="0 0 320 160" className="w-full h-auto max-h-20 overflow-visible">
         {/* S */}
-        <text x="10" y="90" fontFamily="'Inter', sans-serif" fontSize="100" fontWeight="900" fill={textColor}>S</text>
+        <text 
+          x="10" 
+          y="110" 
+          fontFamily="'Inter', sans-serif" 
+          fontSize="105" 
+          fontWeight="700" 
+          fill={textColor}
+        >
+          S
+        </text>
         
-        {/* First i */}
-        <rect x="85" y="45" width="18" height="45" fill={textColor} />
-        <circle cx="94" cy="20" r="15" fill="#72B1E1" />
+        {/* first i */}
+        <rect x="85" y="38" width="20" height="72" fill={textColor} />
+        <circle cx="95" cy="12" r="18" fill={blueColor} />
         
-        {/* Second i */}
-        <rect x="115" y="45" width="18" height="45" fill={textColor} />
-        <circle cx="124" cy="115" r="15" fill="#F58220" />
+        {/* second i */}
+        <rect x="122" y="38" width="20" height="72" fill={textColor} />
+        <circle cx="132" cy="138" r="18" fill={orangeColor} />
         
         {/* X */}
-        <text x="145" y="90" fontFamily="'Inter', sans-serif" fontSize="100" fontWeight="900" fill={textColor}>X</text>
+        <text 
+          x="160" 
+          y="110" 
+          fontFamily="'Inter', sans-serif" 
+          fontSize="105" 
+          fontWeight="700" 
+          fill={textColor}
+        >
+          X
+        </text>
         
         {/* Tagline */}
-        <text x="150" y="130" fontFamily="'Inter', sans-serif" fontSize="26" fontStyle="italic" fontWeight="800" fill={textColor}>
+        <text 
+          x="165" 
+          y="155" 
+          fontFamily="'Inter', sans-serif" 
+          fontSize="24" 
+          fontStyle="italic" 
+          fontWeight="700" 
+          fill={textColor}
+          style={{ letterSpacing: "0.2em" }}
+        >
           We care.
         </text>
       </svg>
@@ -659,16 +701,30 @@ export default function App() {
     }
   };
 
+  const chartData = MONTHS.map(month => {
+    const count = transactions.filter(tx => {
+      const date = tx.timestamp?.toDate();
+      return date && date.toLocaleString('default', { month: 'long' }) === month && date.getFullYear().toString() === filterYear;
+    }).length;
+    return { name: month.substring(0, 3), count };
+  });
+
+  const pieData = [
+    { name: 'FCT', value: stats.fctParts, color: '#10B981' },
+    { name: 'Tester', value: stats.testerParts, color: '#F59E0B' },
+    { name: 'Automation', value: stats.automationParts, color: '#8B5CF6' }
+  ];
+
   return (
     <div className="min-h-screen bg-brand-bg text-slate-900 font-sans flex">
       {/* Sidebar - Desktop */}
-      <aside className="hidden lg:flex w-28 flex-col bg-black sticky top-0 h-screen py-8 overflow-visible z-20">
-        <div className="flex flex-col items-center gap-12 w-full overflow-visible">
-          <div className="w-full px-2 transition-transform duration-500 hover:scale-110">
-            <Logo />
+      <aside className="hidden lg:flex w-24 flex-col bg-brand-sidebar sticky top-0 h-screen py-8 overflow-visible z-20">
+        <div className="flex flex-col items-center gap-10 w-full overflow-visible">
+          <div className="w-full px-2 mb-4">
+            <Logo dark={false} className="drop-shadow-xl" />
           </div>
           
-          <nav className="w-full flex flex-col items-end overflow-visible">
+          <nav className="w-full flex flex-col items-center gap-2 overflow-visible">
             <button 
               onClick={() => setView('home')}
               className={cn("sidebar-item", view === 'home' && "active")}
@@ -704,7 +760,7 @@ export default function App() {
             {loggedInAdmin && (
               <button 
                 onClick={() => setLoggedInAdmin(null)}
-                className="sidebar-item text-red-500 hover:bg-red-500/10"
+                className="sidebar-item text-red-400 hover:text-red-500"
                 title="Logout Admin"
               >
                 <LogOut className="w-6 h-6 relative z-10" />
@@ -1324,8 +1380,8 @@ export default function App() {
               >
                 <div className="p-8">
                   <div className="flex items-center gap-4 mb-6">
-                    <div className="w-12 h-12 bg-brand-accent/10 rounded-2xl flex items-center justify-center">
-                      <CheckCircle2 className="w-6 h-6 text-brand-accent" />
+                    <div className="w-12 h-12 bg-indigo-500/10 rounded-2xl flex items-center justify-center">
+                      <CheckCircle2 className="w-6 h-6 text-indigo-500" />
                     </div>
                     <div>
                       <h3 className="text-2xl font-serif font-black tracking-tight bg-gradient-to-r from-slate-900 to-slate-500 bg-clip-text text-transparent">Confirm Transaction</h3>
@@ -1374,7 +1430,7 @@ export default function App() {
                     <button 
                       onClick={executeTransaction}
                       disabled={isSubmitting}
-                      className="flex-[2] py-4 bg-brand-accent text-white rounded-2xl font-bold hover:bg-brand-accent/90 transition-all flex items-center justify-center gap-2 shadow-lg shadow-brand-accent/20"
+                      className="flex-[2] py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-slate-800 transition-all flex items-center justify-center gap-2 shadow-lg shadow-black/20"
                     >
                       {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
                       Confirm & Save
@@ -1409,194 +1465,99 @@ export default function App() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="space-y-8"
+              className="space-y-10"
             >
               {/* Header Section */}
-              <div className="flex items-center justify-between">
-                <h2 className="text-5xl font-serif font-black tracking-tighter bg-gradient-to-r from-slate-900 to-slate-500 bg-clip-text text-transparent">Dashboard</h2>
-                <div className="flex items-center gap-4">
+              <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+                <div>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em] mb-2">Overview</p>
+                  <h2 className="text-5xl font-display font-bold tracking-tight text-slate-900">Analytics Dashboard</h2>
+                </div>
+                <div className="flex items-center gap-3">
                   <button 
                     onClick={() => setView('team-select')}
-                    className="px-6 py-3 bg-white border border-brand-border text-slate-900 rounded-2xl font-bold text-xs hover:bg-slate-50 transition-all shadow-xl shadow-black/5 flex items-center gap-2"
+                    className="btn-primary flex items-center gap-2"
                   >
-                    <Scan className="w-4 h-4" />
-                    Create Transaction
+                    <Plus className="w-4 h-4" />
+                    New Transaction
                   </button>
                 </div>
               </div>
 
-              {/* Summary Cards Section */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {[
-                  { label: 'FCT Team Parts', value: stats.fctParts, icon: <Cpu className="w-6 h-6" />, color: 'bg-blue-500' },
-                  { label: 'Tester Team Parts', value: stats.testerParts, icon: <Zap className="w-6 h-6" />, color: 'bg-emerald-500' },
-                  { label: 'Automation Team Parts', value: stats.automationParts, icon: <Box className="w-6 h-6" />, color: 'bg-orange-500' }
-                ].map((stat, i) => (
-                  <div key={i} className="bg-white rounded-[40px] p-8 shadow-sm border border-brand-border hover:shadow-md transition-all group">
-                    <div className="flex items-center justify-between mb-6">
-                      <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-lg", stat.color)}>
-                        {stat.icon}
-                      </div>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{stat.label}</span>
-                    </div>
-                    <div className="flex items-baseline gap-2">
-                      <p className="text-5xl font-black tracking-tighter text-slate-900">{stat.value.toLocaleString()}</p>
-                      <span className="text-slate-400 font-bold text-sm">Parts</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Active Filters Section */}
-              <div className="bg-white rounded-[40px] p-8 shadow-sm border border-brand-border">
-                <div className="flex items-center gap-2 mb-6">
-                  <h3 className="text-sm font-bold text-slate-900">Active filters</h3>
-                  <div className="w-4 h-4 bg-slate-100 rounded-full flex items-center justify-center text-[10px] text-slate-400 font-bold">i</div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div className="relative group">
-                    <select 
-                      value={filterMonth}
-                      onChange={(e) => setFilterMonth(e.target.value)}
-                      className="w-full h-14 pl-6 pr-10 bg-slate-50 border border-slate-100 rounded-2xl appearance-none font-bold text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-black/5 transition-all"
-                    >
-                      {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
-                    </select>
-                    <Search className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                  </div>
-                  <div className="relative group">
-                    <select 
-                      value={filterYear}
-                      onChange={(e) => setFilterYear(e.target.value)}
-                      className="w-full h-14 pl-6 pr-10 bg-slate-50 border border-slate-100 rounded-2xl appearance-none font-bold text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-black/5 transition-all"
-                    >
-                      {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
-                    </select>
-                    <Search className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                  </div>
-                  <div className="md:col-span-2 relative">
-                    <input 
-                      type="text"
-                      placeholder="Search transactions..."
-                      className="w-full h-14 pl-12 pr-6 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-black/5 transition-all"
-                    />
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                  </div>
-                </div>
-              </div>
-
-              {/* Recent Activity Section */}
+              {/* Recent Activity Section (Now at the top) */}
               <div className="space-y-8">
-                <div className="flex items-center justify-between px-4">
-                  <div className="flex items-center gap-4">
-                    <h4 className="text-2xl font-serif font-black tracking-tight text-slate-900">Recent Activity</h4>
-                    <span className="px-3 py-1 bg-slate-100 rounded-full text-[10px] font-bold text-slate-500 uppercase tracking-widest border border-slate-200">
-                      Live Feed
-                    </span>
+                <div className="flex items-center justify-between px-2">
+                  <div>
+                    <h4 className="text-2xl font-display font-bold text-slate-900">Recent Activity</h4>
+                    <p className="text-xs text-slate-400 font-medium">Live transaction feed</p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-400 border border-slate-100">
-                      <LayoutDashboard className="w-4 h-4" />
-                    </div>
-                    <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-400 border border-slate-100">
-                      <Settings className="w-4 h-4" />
-                    </div>
-                  </div>
+                  <button 
+                    onClick={() => setView('history')}
+                    className="text-xs font-bold text-indigo-600 hover:text-indigo-700 transition-colors"
+                  >
+                    View All History →
+                  </button>
                 </div>
                 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                   {['FCT', 'TESTER', 'AUTOMATION'].map((team) => {
-                    const teamTransactions = filteredTransactions.filter(tx => tx.team === team);
+                    const teamTransactions = filteredTransactions.filter(tx => tx.team === team).slice(0, 10);
                     return (
-                      <div key={team} className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden flex flex-col h-[600px]">
-                        {/* Column Header */}
-                        <div className="p-5 border-b border-slate-50 bg-slate-50/30 flex items-center justify-between">
+                      <div key={team} className="soft-card p-6 flex flex-col h-[600px]">
+                        <div className="flex items-center justify-between mb-6">
                           <div className="flex items-center gap-3">
                             <div className={cn(
-                              "w-1.5 h-5 rounded-full",
-                              team === 'FCT' ? "bg-blue-500" :
-                              team === 'TESTER' ? "bg-emerald-500" :
-                              "bg-orange-500"
+                              "w-2 h-2 rounded-full",
+                              team === 'FCT' ? "bg-emerald-500" :
+                              team === 'TESTER' ? "bg-amber-500" :
+                              "bg-purple-500"
                             )} />
-                            <h5 className="text-xs font-black text-slate-900 tracking-tight uppercase">{team} TEAM</h5>
+                            <h5 className="text-xs font-bold text-slate-900 tracking-widest uppercase">{team} TEAM</h5>
                           </div>
-                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-white px-2 py-1 rounded-md border border-slate-100">
-                            {teamTransactions.length} TX
+                          <span className="text-[10px] font-bold text-slate-400">
+                            {teamTransactions.length} Recent
                           </span>
                         </div>
 
-                        {/* Scrollable List Body */}
-                        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3">
+                        <div className="flex-1 overflow-y-auto custom-scrollbar space-y-4 pr-2">
                           {teamTransactions.map((tx) => (
                             <div 
                               key={tx.id}
-                              className="group relative bg-white border border-slate-50 rounded-2xl p-4 hover:border-slate-200 hover:shadow-md hover:shadow-slate-200/20 transition-all cursor-default"
+                              className="p-4 rounded-2xl bg-slate-50/50 border border-slate-100/50 hover:bg-white hover:shadow-soft-sm transition-all duration-300"
                             >
                               <div className="flex items-start justify-between mb-3">
-                                <div className="flex items-center gap-2.5">
-                                  <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-slate-900 font-bold text-[9px] uppercase border border-slate-200">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 rounded-xl bg-white shadow-sm flex items-center justify-center text-slate-900 font-bold text-[10px]">
                                     {tx.technicianName.charAt(0)}
                                   </div>
                                   <div>
                                     <p className="text-[11px] font-bold text-slate-900 leading-none mb-1">{tx.technicianName}</p>
-                                    <p className="text-[9px] font-medium text-slate-400 uppercase tracking-tighter">
-                                      {tx.timestamp?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })} • {tx.timestamp?.toDate().toLocaleDateString([], { day: '2-digit', month: 'short' })}
+                                    <p className="text-[9px] font-medium text-slate-400">
+                                      {tx.timestamp?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                     </p>
                                   </div>
                                 </div>
-                                <div className="flex items-center gap-1.5">
-                                  <div className="w-7 h-7 rounded-lg bg-slate-900 text-white flex items-center justify-center">
-                                    <span className="text-[10px] font-black">{tx.quantity}</span>
-                                  </div>
-                                </div>
+                                <span className="px-2 py-1 bg-slate-900 text-white rounded-lg text-[10px] font-bold">
+                                  {tx.quantity}
+                                </span>
                               </div>
-
-                              <div className="space-y-1">
-                                <p className="text-[11px] font-bold text-slate-800 truncate">#{tx.partBarcode}</p>
-                                <p className="text-[10px] text-slate-400 truncate leading-tight">{tx.partName || 'Unknown Part'}</p>
-                              </div>
-
-                              {tx.notes && (
-                                <div className="mt-3 pt-3 border-t border-slate-50">
-                                  <p className="text-[10px] text-slate-500 italic line-clamp-1">"{tx.notes}"</p>
-                                </div>
-                              )}
-
-                              {tx.status === 'close' && tx.verifiedBy && (
-                                <div className="mt-3 pt-3 border-t border-slate-50 flex items-center gap-2">
-                                  <div className="w-5 h-5 rounded-full bg-emerald-50 flex items-center justify-center">
-                                    <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                                  </div>
-                                  <p className="text-[9px] font-bold text-emerald-600 uppercase tracking-widest">
-                                    Approved by {tx.verifiedBy}
-                                  </p>
-                                </div>
-                              )}
-
-                              <div className="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                {tx.status === 'open' && (
-                                  <button 
-                                    onClick={() => setShowVerifierModal(tx.id)}
-                                    className="p-1.5 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-all shadow-sm"
-                                    title="Verify"
-                                  >
-                                    <CheckCircle2 className="w-3 h-3" />
-                                  </button>
-                                )}
+                              <p className="text-[11px] font-bold text-slate-800 mb-1 truncate">#{tx.partBarcode}</p>
+                              <p className="text-[10px] text-slate-400 truncate">{tx.partName}</p>
+                              
+                              {tx.status === 'open' && (
                                 <button 
-                                  onClick={() => handleViewPartDetails(tx.partBarcode)}
-                                  className="p-1.5 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-all shadow-sm"
-                                  title="View Details"
+                                  onClick={() => setShowVerifierModal(tx.id)}
+                                  className="mt-3 w-full py-2 bg-emerald-500/10 text-emerald-600 rounded-xl text-[10px] font-bold hover:bg-emerald-500 hover:text-white transition-all"
                                 >
-                                  <Box className="w-3 h-3" />
+                                  Verify Now
                                 </button>
-                              </div>
+                              )}
                             </div>
                           ))}
                           
                           {teamTransactions.length === 0 && (
-                            <div className="h-full flex flex-col items-center justify-center opacity-20 py-20">
-                              <History className="w-10 h-10 mb-2" />
+                            <div className="h-full flex flex-col items-center justify-center opacity-30 py-20">
+                              <History className="w-8 h-8 mb-2" />
                               <p className="text-[10px] font-bold uppercase tracking-widest">No Activity</p>
                             </div>
                           )}
@@ -1604,6 +1565,92 @@ export default function App() {
                       </div>
                     );
                   })}
+                </div>
+              </div>
+
+              {/* Charts Section (Enlarged for better readability) */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="lg:col-span-2 soft-card !rounded-[2rem] p-10">
+                  <div className="flex items-center justify-between mb-10">
+                    <div>
+                      <h4 className="text-xl font-display font-bold text-slate-900">Transaction Volume</h4>
+                      <p className="text-xs text-slate-400 font-medium">Monthly activity</p>
+                    </div>
+                    <select 
+                      value={filterYear}
+                      onChange={(e) => setFilterYear(e.target.value)}
+                      className="px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-600 focus:outline-none"
+                    >
+                      {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                  </div>
+                  <div className="h-[320px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={chartData}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                        <XAxis 
+                          dataKey="name" 
+                          axisLine={false} 
+                          tickLine={false} 
+                          tick={{ fontSize: 11, fontWeight: 600, fill: '#64748b' }}
+                          dy={12}
+                        />
+                        <YAxis 
+                          axisLine={false} 
+                          tickLine={false} 
+                          tick={{ fontSize: 11, fontWeight: 600, fill: '#64748b' }}
+                        />
+                        <Tooltip 
+                          cursor={{ fill: '#f8fafc' }}
+                          contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: '14px' }}
+                        />
+                        <Bar 
+                          dataKey="count" 
+                          fill="#0F172A" 
+                          radius={[6, 6, 0, 0]} 
+                          barSize={36}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                <div className="soft-card !rounded-[2rem] p-10 flex flex-col">
+                  <h4 className="text-xl font-display font-bold text-slate-900 mb-2">Stock Distribution</h4>
+                  <p className="text-xs text-slate-400 font-medium mb-8">Inventory split</p>
+                  <div className="flex-1 min-h-[260px] relative">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={pieData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={70}
+                          outerRadius={95}
+                          paddingAngle={8}
+                          dataKey="value"
+                        >
+                          {pieData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                      <span className="text-3xl font-display font-bold text-slate-900">{stats.totalParts}</span>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total</span>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4 mt-8">
+                    {pieData.map((item, i) => (
+                      <div key={i} className="flex flex-col items-center">
+                        <div className="w-3 h-3 rounded-full mb-2" style={{ backgroundColor: item.color }} />
+                        <span className="text-[10px] font-bold text-slate-500 uppercase truncate w-full text-center">{item.name}</span>
+                        <span className="text-sm font-mono font-bold text-slate-900">{item.value}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             </motion.div>
@@ -1696,13 +1743,13 @@ export default function App() {
                               placeholder="Tap here and scan barcode..."
                               className="input-field w-full text-xl pr-12"
                             />
-                            <Scan className="absolute right-4 top-1/2 -translate-y-1/2 w-6 h-6 text-slate-300 group-focus-within:text-brand-accent transition-colors" />
+                            <Scan className="absolute right-4 top-1/2 -translate-y-1/2 w-6 h-6 text-slate-300 group-focus-within:text-indigo-500 transition-colors" />
                           </div>
                         ) : (
                           <div className="space-y-4">
                             <div className="flex items-center justify-between p-6 bg-slate-50 rounded-2xl border border-slate-100">
                               <div className="flex items-center gap-4">
-                                <div className="w-12 h-12 bg-white rounded-xl shadow-sm flex items-center justify-center text-brand-accent">
+                                <div className="w-12 h-12 bg-white rounded-xl shadow-sm flex items-center justify-center text-indigo-500">
                                   <Package className="w-6 h-6" />
                                 </div>
                                 <div>
