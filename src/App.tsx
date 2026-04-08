@@ -432,8 +432,8 @@ export default function App() {
           const ws = wb.Sheets[wsname];
           const data = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
 
-          const rows = data.slice(3);
-          const validRows = rows.filter(row => String(row[0] || '').trim() && String(row[1] || '').trim());
+          const rows = data.slice(1);
+          const validRows = rows.filter(row => row && row.length >= 2 && String(row[0] || '').trim() && String(row[1] || '').trim());
           
           setImportProgress({ current: 0, total: validRows.length });
 
