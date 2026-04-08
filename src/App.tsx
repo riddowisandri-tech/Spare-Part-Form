@@ -93,36 +93,27 @@ const YEARS = Array.from({ length: 5 }, (_, i) => (new Date().getFullYear() - i)
 
 // --- Components ---
 
-const Logo = ({ dark = false }: { dark?: boolean }) => {
-  const gradientId = dark ? "siixGradientDark" : "siixGradientLight";
+const Logo = ({ dark = false, className = "" }: { dark?: boolean; className?: string }) => {
+  const textColor = dark ? "#000000" : "#FFFFFF";
   return (
-    <div className="w-full flex items-center justify-center py-2">
-      <svg viewBox="0 0 240 150" className="w-full h-auto max-h-24 overflow-visible drop-shadow-lg">
-        <defs>
-          <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor={dark ? "#1e293b" : "#FFFFFF"} />
-            <stop offset="50%" stopColor="#72B1E1" />
-            <stop offset="100%" stopColor="#F58220" />
-            <animate attributeName="x1" values="0%;100%;0%" dur="6s" repeatCount="indefinite" />
-            <animate attributeName="x2" values="100%;0%;100%" dur="6s" repeatCount="indefinite" />
-          </linearGradient>
-        </defs>
-        {/* 's' */}
-        <text x="10" y="85" fontFamily="'Arial Black', 'Arial', sans-serif" fontSize="90" fontWeight="900" fill={`url(#${gradientId})`}>s</text>
+    <div className={cn("w-full flex items-center justify-center py-2", className)}>
+      <svg viewBox="0 0 260 140" className="w-full h-auto max-h-24 overflow-visible drop-shadow-lg">
+        {/* S */}
+        <text x="10" y="90" fontFamily="'Inter', sans-serif" fontSize="100" fontWeight="900" fill={textColor}>S</text>
         
-        {/* First 'i' */}
-        <rect x="65" y="40" width="18" height="45" fill={dark ? "#000000" : "white"} stroke={dark ? "#e2e8f0" : "none"} strokeWidth="1" />
-        <circle cx="74" cy="20" r="14" fill="#72B1E1" />
+        {/* First i */}
+        <rect x="85" y="45" width="18" height="45" fill={textColor} />
+        <circle cx="94" cy="20" r="15" fill="#72B1E1" />
         
-        {/* Second 'i' */}
-        <rect x="95" y="40" width="18" height="45" fill={dark ? "#000000" : "white"} stroke={dark ? "#e2e8f0" : "none"} strokeWidth="1" />
-        <circle cx="104" cy="105" r="14" fill="#F58220" />
+        {/* Second i */}
+        <rect x="115" y="45" width="18" height="45" fill={textColor} />
+        <circle cx="124" cy="115" r="15" fill="#F58220" />
         
-        {/* 'x' */}
-        <text x="125" y="85" fontFamily="'Arial Black', 'Arial', sans-serif" fontSize="90" fontWeight="900" fill={`url(#${gradientId})`}>x</text>
+        {/* X */}
+        <text x="145" y="90" fontFamily="'Inter', sans-serif" fontSize="100" fontWeight="900" fill={textColor}>X</text>
         
-        {/* "We care." - Full tagline with proper spacing and visibility */}
-        <text x="110" y="130" fontFamily="'Libre Baskerville', serif" fontSize="28" fontStyle="italic" fontWeight="bold" fill={dark ? "#000000" : "white"}>
+        {/* Tagline */}
+        <text x="150" y="130" fontFamily="'Inter', sans-serif" fontSize="26" fontStyle="italic" fontWeight="800" fill={textColor}>
           We care.
         </text>
       </svg>
@@ -644,11 +635,11 @@ export default function App() {
 
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <header className="px-6 py-6 flex flex-col md:flex-row items-center md:justify-between gap-4">
-          <div className="lg:hidden w-32 md:w-40">
+        <header className="px-6 py-8 flex flex-col md:flex-row items-center md:justify-between gap-6 border-b border-slate-100/50 bg-white/30 backdrop-blur-md">
+          <div className="lg:hidden w-48 md:w-56 flex items-center justify-center">
             <Logo dark={true} />
           </div>
-          <div className="text-center md:text-left">
+          <div className="text-center md:text-left flex-1">
             <h1 className="text-3xl md:text-4xl lg:text-5xl font-serif font-black tracking-tighter bg-gradient-to-r from-slate-900 to-slate-500 bg-clip-text text-transparent drop-shadow-2xl leading-tight">
               Spare Parts Form System
             </h1>
@@ -1310,9 +1301,9 @@ export default function App() {
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 {[
-                  { name: 'FCT', icon: <Cpu className="w-8 h-8" />, color: 'bg-blue-500', desc: 'Functional Circuit Tester' },
-                  { name: 'TESTER', icon: <Zap className="w-8 h-8" />, color: 'bg-emerald-500', desc: 'Tester Equipment' },
-                  { name: 'AUTOMATION', icon: <Box className="w-8 h-8" />, color: 'bg-orange-500', desc: 'Automation Systems' }
+                  { name: 'FCT', icon: <Cpu className="w-8 h-8" />, color: 'bg-blue-500'},
+                  { name: 'TESTER', icon: <Zap className="w-8 h-8" />, color: 'bg-emerald-500'},
+                  { name: 'AUTOMATION', icon: <Box className="w-8 h-8" />, color: 'bg-orange-500', }
                 ].map((team) => (
                   <button 
                     key={team.name}
