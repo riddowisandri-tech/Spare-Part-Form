@@ -719,7 +719,7 @@ export default function App() {
     <div className="min-h-screen bg-brand-bg text-slate-900 font-sans flex">
       {/* Sidebar - Desktop */}
       <aside className="hidden lg:flex w-24 flex-col bg-brand-sidebar sticky top-0 h-screen py-8 overflow-visible z-20">
-        <div className="flex flex-col items-center gap-10 w-full overflow-visible">
+        <div className="flex flex-col items-center gap-10 w-full overflow-visible h-full">
           <div className="w-full px-2 mb-4">
             <Logo dark={false} className="drop-shadow-xl" />
           </div>
@@ -756,17 +756,31 @@ export default function App() {
             >
               <Settings className="w-6 h-6 relative z-10" />
             </button>
+          </nav>
 
-            {loggedInAdmin && (
+          {/* Account Tools at the bottom */}
+          <div className="mt-auto w-full flex flex-col items-center gap-2">
+            {loggedInAdmin ? (
               <button 
                 onClick={() => setLoggedInAdmin(null)}
                 className="sidebar-item text-red-400 hover:text-red-500"
-                title="Logout Admin"
+                title={`Logout ${loggedInAdmin.name}`}
               >
-                <LogOut className="w-6 h-6 relative z-10" />
+                <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-white font-bold text-xs relative z-10">
+                  {loggedInAdmin.name.charAt(0).toUpperCase()}
+                </div>
+                <LogOut className="w-4 h-4 absolute bottom-1 right-1 bg-brand-sidebar rounded-full p-0.5 z-20" />
+              </button>
+            ) : (
+              <button 
+                onClick={() => setShowPasswordPrompt({ title: 'Admin Login', action: () => {} })}
+                className="sidebar-item"
+                title="Admin Login"
+              >
+                <UserIcon className="w-6 h-6 relative z-10" />
               </button>
             )}
-          </nav>
+          </div>
         </div>
       </aside>
 
@@ -2075,104 +2089,67 @@ export default function App() {
         )}
 
         {showVerifierModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setShowVerifierModal(null)}
-              className="absolute inset-0 bg-slate-900/40 backdrop-blur-md"
+              className="absolute inset-0 bg-slate-900/10 backdrop-blur-[1px]"
             />
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              initial={{ opacity: 0, scale: 0.9, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-lg bg-white rounded-[40px] shadow-2xl overflow-hidden border border-brand-border"
+              exit={{ opacity: 0, scale: 0.9, y: 10 }}
+              className="relative w-full max-w-[280px] bg-white rounded-[28px] shadow-2xl border border-brand-border overflow-hidden"
             >
-              <div className="p-8 md:p-10">
-                <div className="flex items-center justify-between mb-8">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-2xl bg-emerald-100 flex items-center justify-center text-emerald-600">
-                      <CheckCircle2 className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Authorization Required</p>
-                      <h3 className="text-2xl font-serif font-black tracking-tight text-slate-900">Verify Transaction</h3>
-                    </div>
+              <div className="p-5">
+                <div className="text-center">
+                  <div className={cn(
+                    "w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-sm",
+                    loggedInAdmin ? "bg-emerald-50 text-emerald-600" : "bg-slate-50 text-slate-400"
+                  )}>
+                    {loggedInAdmin ? <ShieldCheck className="w-6 h-6" /> : <UserIcon className="w-6 h-6" />}
                   </div>
-                  <button 
-                    onClick={() => setShowVerifierModal(null)}
-                    className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 hover:text-black hover:bg-slate-100 transition-all"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
+                  
+                  <h3 className="text-base font-bold text-slate-900 mb-0.5">
+                    {loggedInAdmin ? "Verify Action" : "Authorized Only"}
+                  </h3>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-5">
+                    {loggedInAdmin ? `As ${loggedInAdmin.name}` : "Admin access required"}
+                  </p>
 
-                <p className="text-sm text-slate-500 mb-8">
-                  {loggedInAdmin 
-                    ? `Confirm authorization as ${loggedInAdmin.name}.`
-                    : "Please enter your admin credentials to approve this spare part withdrawal."}
-                </p>
-
-                <div className="space-y-6">
-                  {!loggedInAdmin ? (
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Username</label>
-                        <input
-                          type="text"
-                          value={adminUsername}
-                          onChange={(e) => setAdminUsername(e.target.value)}
-                          placeholder="Username"
-                          className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
-                          autoFocus
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Password</label>
-                        <input
-                          type="password"
-                          value={adminPassword}
-                          onChange={(e) => setAdminPassword(e.target.value)}
-                          placeholder="Password"
-                          className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleVerifyTransaction(showVerifierModal);
-                          }}
-                        />
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="p-6 bg-emerald-50 border border-emerald-100 rounded-3xl flex items-center gap-4">
-                      <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm">
-                        <ShieldCheck className="w-6 h-6 text-emerald-600" />
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold text-emerald-800">{loggedInAdmin.name}</p>
-                        <p className="text-[10px] text-emerald-600 uppercase tracking-widest font-medium">Logged in as Admin</p>
-                      </div>
-                    </div>
-                  )}
-
-                  <button
-                    onClick={() => handleVerifyTransaction(showVerifierModal)}
-                    className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-bold text-xs hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 active:scale-[0.98]"
-                  >
-                    {loggedInAdmin ? "Confirm Authorization" : "Login & Authorize"}
-                  </button>
-                </div>
-
-                <div className="mt-8 pt-8 border-t border-slate-100">
-                  <button 
-                    onClick={() => {
-                      setShowVerifierModal(null);
-                      setAdminUsername('');
-                      setAdminPassword('');
-                    }}
-                    className="w-full py-4 bg-slate-50 text-slate-400 rounded-2xl font-bold text-xs hover:bg-slate-100 hover:text-slate-600 transition-all"
-                  >
-                    Cancel Verification
-                  </button>
+                  <div className="space-y-2">
+                    {loggedInAdmin ? (
+                      <button
+                        onClick={() => handleVerifyTransaction(showVerifierModal)}
+                        className="w-full py-3.5 bg-emerald-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 active:scale-[0.98]"
+                      >
+                        Confirm Verify
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          const txId = showVerifierModal;
+                          setShowVerifierModal(null);
+                          setShowPasswordPrompt({ 
+                            title: 'Admin Login', 
+                            action: () => setShowVerifierModal(txId) 
+                          });
+                        }}
+                        className="w-full py-3.5 bg-slate-900 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-all shadow-lg shadow-black/10 active:scale-[0.98]"
+                      >
+                        Login to Verify
+                      </button>
+                    )}
+                    
+                    <button 
+                      onClick={() => setShowVerifierModal(null)}
+                      className="w-full py-2 text-slate-400 font-bold text-[9px] uppercase tracking-widest hover:text-slate-600 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
                 </div>
               </div>
             </motion.div>
@@ -2232,6 +2209,17 @@ export default function App() {
         >
           <History className="w-5 h-5" />
           <span className="text-[9px] font-bold uppercase tracking-widest">Logs</span>
+        </button>
+
+        <button 
+          onClick={() => loggedInAdmin ? setLoggedInAdmin(null) : setShowPasswordPrompt({ title: 'Admin Login', action: () => {} })}
+          className={cn(
+            "flex flex-col items-center gap-1 transition-all duration-300 px-4 py-1.5 rounded-xl",
+            loggedInAdmin ? "text-indigo-600" : "text-slate-400"
+          )}
+        >
+          {loggedInAdmin ? <LogOut className="w-5 h-5" /> : <UserIcon className="w-5 h-5" />}
+          <span className="text-[9px] font-bold uppercase tracking-widest">{loggedInAdmin ? 'Logout' : 'Login'}</span>
         </button>
       </nav>
     </div>
