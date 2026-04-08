@@ -58,6 +58,14 @@ service cloud.firestore {
              data.employeeId is string && data.employeeId.size() > 0;
     }
 
+    function isValidAdminAccount(data) {
+      return data.keys().hasAll(['username', 'password', 'name', 'role']) &&
+             data.username is string && data.username.size() > 0 &&
+             data.password is string && data.password.size() > 0 &&
+             data.name is string && data.name.size() > 0 &&
+             data.role in ['admin', 'superadmin'];
+    }
+
     // Spareparts collection
     match /spareparts/{partId} {
       allow read: if true;
@@ -78,6 +86,12 @@ service cloud.firestore {
       allow read: if true;
       allow create, update: if isValidVerifier(request.resource.data);
       allow delete: if true;
+    }
+
+    // Admin accounts collection
+    match /admin_accounts/{accountId} {
+      allow read: if true; // Needed for login verification
+      allow write: if true; // Allow management from app
     }
 
     // Users collection (for profile info if needed)

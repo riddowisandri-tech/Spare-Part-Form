@@ -40,6 +40,18 @@
         "role": { "type": "string", "description": "Role or position of the verifier." }
       },
       "required": ["name", "employeeId"]
+    },
+    "AdminAccount": {
+      "title": "Admin Account",
+      "description": "Account with credentials for system administration and verification.",
+      "type": "object",
+      "properties": {
+        "username": { "type": "string", "description": "Unique username for login." },
+        "password": { "type": "string", "description": "Password for login." },
+        "name": { "type": "string", "description": "Display name of the account holder." },
+        "role": { "type": "string", "enum": ["admin", "superadmin"], "description": "Role of the account." }
+      },
+      "required": ["username", "password", "name", "role"]
     }
   },
   "firestore": {
@@ -54,6 +66,10 @@
     "verifiers": {
       "schema": "Verifier",
       "description": "List of authorized verifiers."
+    },
+    "admin_accounts": {
+      "schema": "AdminAccount",
+      "description": "Collection of admin credentials."
     }
   }
 }

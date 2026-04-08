@@ -39,7 +39,9 @@ import {
   Zap,
   Cpu,
   LayoutDashboard,
-  Download
+  Download,
+  Users,
+  Trash2
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -81,6 +83,14 @@ interface Verifier {
   name: string;
   employeeId: string;
   role: string;
+}
+
+interface AdminAccount {
+  id: string;
+  username: string;
+  password: string;
+  name: string;
+  role: 'admin' | 'superadmin';
 }
 
 // --- Constants ---
@@ -150,6 +160,8 @@ export default function App() {
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [importStatus, setImportStatus] = useState<'idle' | 'importing' | 'success'>('idle');
+  const [isVerifying, setIsVerifying] = useState(false);
   const [importProgress, setImportProgress] = useState({ current: 0, total: 0 });
   const [confirmAction, setConfirmAction] = useState<{ type: 'history' | 'parts', title: string, message: string } | null>(null);
   const [pendingTransaction, setPendingTransaction] = useState<{
@@ -165,29 +177,62 @@ export default function App() {
     vendor?: string;
   } | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [adminUsername, setAdminUsername] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
+  const [adminAccounts, setAdminAccounts] = useState<AdminAccount[]>([]);
+  const [showAdminManagement, setShowAdminManagement] = useState(false);
+  const [deletingAccountId, setDeletingAccountId] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState(false);
   const [showPasswordPrompt, setShowPasswordPrompt] = useState<{
     action: () => void;
     title: string;
   } | null>(null);
 
-  const ADMIN_PASSWORD = "lego";
+  useEffect(() => {
+    const q = query(collection(db, 'admin_accounts'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const accs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AdminAccount));
+      setAdminAccounts(accs);
+      
+      // Bootstrap first admin if none exist
+      if (accs.length === 0) {
+        setDoc(doc(db, 'admin_accounts', 'default-admin'), {
+          username: 'admin',
+          password: 'lego',
+          name: 'System Admin',
+          role: 'superadmin'
+        });
+      }
+    });
+    return () => unsubscribe();
+  }, []);
 
   const handleAdminAction = (title: string, action: () => void) => {
     setShowPasswordPrompt({ title, action });
   };
 
-  const verifyPassword = () => {
-    if (adminPassword === ADMIN_PASSWORD) {
+  const verifyPassword = async () => {
+    setIsVerifying(true);
+    // Artificial delay for better UX
+    await new Promise(resolve => setTimeout(resolve, 600));
+    
+    const account = adminAccounts.find(acc => acc.username === adminUsername && acc.password === adminPassword);
+    
+    if (account) {
       const action = showPasswordPrompt?.action;
       setShowPasswordPrompt(null);
+      setAdminUsername('');
       setAdminPassword('');
       setPasswordError(false);
-      if (action) action();
+      setIsVerifying(false);
+      // Small delay to ensure modal is closed before file picker opens
+      setTimeout(() => {
+        if (action) action();
+      }, 300);
     } else {
       setPasswordError(true);
-      setMessage({ type: 'error', text: "Incorrect password!" });
+      setIsVerifying(false);
+      setMessage({ type: 'error', text: "Invalid Username or Password!" });
       setTimeout(() => {
         setMessage(null);
         setPasswordError(false);
@@ -323,67 +368,80 @@ export default function App() {
     if (!file) return;
 
     setIsImporting(true);
+    setImportStatus('importing');
     setImportProgress({ current: 0, total: 0 });
+    
     try {
       const reader = new FileReader();
       reader.onload = async (evt) => {
-        const bstr = evt.target?.result;
-        const wb = XLSX.read(bstr, { type: 'binary' });
-        const wsname = wb.SheetNames[0];
-        const ws = wb.Sheets[wsname];
-        const data = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
+        try {
+          const bstr = evt.target?.result;
+          const wb = XLSX.read(bstr, { type: 'binary' });
+          const wsname = wb.SheetNames[0];
+          const ws = wb.Sheets[wsname];
+          const data = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
 
-        const rows = data.slice(3);
-        const uniqueBarcodes = new Set<string>();
-        const validRows = rows.filter(row => String(row[0] || '').trim() && String(row[1] || '').trim());
-        
-        setImportProgress({ current: 0, total: validRows.length });
-
-        let processed = 0;
-        for (const row of validRows) {
-          const barcode = String(row[0] || '').trim();
-          const name = String(row[1] || '').trim();
-          const location = String(row[2] || '').trim();
-          const model = String(row[3] || '').trim();
-          const vendor = String(row[4] || '').trim();
-
-          uniqueBarcodes.add(barcode);
-          const partRef = doc(db, 'spareparts', barcode);
+          const rows = data.slice(3);
+          const validRows = rows.filter(row => String(row[0] || '').trim() && String(row[1] || '').trim());
           
-          await setDoc(partRef, {
-            barcode,
-            name,
-            location,
-            model,
-            vendor,
-            team: importTeam,
-            description: '',
-          }, { merge: true });
+          setImportProgress({ current: 0, total: validRows.length });
 
-          const partSnap = await getDoc(partRef);
-          if (!partSnap.exists() || partSnap.data()?.stock === undefined) {
-            await updateDoc(partRef, { stock: 0 });
+          let processed = 0;
+          const uniqueBarcodes = new Set<string>();
+
+          for (const row of validRows) {
+            const barcode = String(row[0] || '').trim();
+            const name = String(row[1] || '').trim();
+            const location = String(row[2] || '').trim();
+            const model = String(row[3] || '').trim();
+            const vendor = String(row[4] || '').trim();
+
+            uniqueBarcodes.add(barcode);
+            const partRef = doc(db, 'spareparts', barcode);
+            
+            await setDoc(partRef, {
+              barcode,
+              name,
+              location,
+              model,
+              vendor,
+              team: importTeam,
+              description: '',
+            }, { merge: true });
+
+            const partSnap = await getDoc(partRef);
+            if (!partSnap.exists() || partSnap.data()?.stock === undefined) {
+              await updateDoc(partRef, { stock: 0 });
+            }
+
+            processed++;
+            setImportProgress(prev => ({ ...prev, current: processed }));
           }
 
-          processed++;
-          setImportProgress(prev => ({ ...prev, current: processed }));
+          setImportStatus('success');
+          const snap = await getDocs(collection(db, 'spareparts'));
+          setStats(prev => ({ ...prev, totalParts: snap.size }));
+        } catch (err) {
+          console.error("Reader error:", err);
+          setMessage({ type: 'error', text: "Error processing Excel data." });
+          setIsImporting(false);
+          setImportStatus('idle');
+        } finally {
+          // Reset input
+          e.target.value = '';
         }
-
-        const finalCount = uniqueBarcodes.size;
-        setMessage({ type: 'success', text: `Successfully imported ${finalCount} unique spare parts.` });
-        
-        const snap = await getDocs(collection(db, 'spareparts'));
-        setStats(prev => ({ ...prev, totalParts: snap.size }));
-        setShowSettings(false);
+      };
+      reader.onerror = () => {
+        setMessage({ type: 'error', text: "Failed to read file." });
         setIsImporting(false);
+        setImportStatus('idle');
       };
       reader.readAsBinaryString(file);
     } catch (err) {
       console.error("Import error:", err);
-      setMessage({ type: 'error', text: "Failed to import Excel file." });
+      setMessage({ type: 'error', text: "Failed to initiate import." });
       setIsImporting(false);
-    } finally {
-      setTimeout(() => setMessage(null), 5000);
+      setImportStatus('idle');
     }
   };
 
@@ -563,9 +621,11 @@ export default function App() {
     }
   };
 
-  const handleVerifyTransaction = async (txId: string, verifierName: string) => {
-    if (verifierPasswordInput !== '12345') {
-      setMessage({ type: 'error', text: 'Incorrect verifier password!' });
+  const handleVerifyTransaction = async (txId: string) => {
+    const account = adminAccounts.find(acc => acc.username === adminUsername && acc.password === adminPassword);
+    
+    if (!account) {
+      setMessage({ type: 'error', text: 'Invalid Username or Password!' });
       setTimeout(() => setMessage(null), 3000);
       return;
     }
@@ -574,12 +634,12 @@ export default function App() {
       const txRef = doc(db, 'transactions', txId);
       await updateDoc(txRef, {
         status: 'close',
-        verifiedBy: verifierName
+        verifiedBy: account.name
       });
-      setMessage({ type: 'success', text: `Transaction verified by ${verifierName}.` });
+      setMessage({ type: 'success', text: `Transaction verified by ${account.name}.` });
       setShowVerifierModal(null);
-      setSelectedVerifier(null);
-      setVerifierPasswordInput('');
+      setAdminUsername('');
+      setAdminPassword('');
     } catch (error) {
       console.error("Verification failed", error);
       setMessage({ type: 'error', text: 'Failed to verify transaction.' });
@@ -750,6 +810,22 @@ export default function App() {
                         disabled={isClearing}
                       />
                     </div>
+
+                    <button 
+                      onClick={() => handleAdminAction('Manage Admins', () => {
+                        setShowSettings(false);
+                        setShowAdminManagement(true);
+                      })}
+                      className="w-full p-4 bg-slate-50 rounded-2xl flex items-center gap-4 hover:bg-slate-100 transition-all border border-brand-border group"
+                    >
+                      <div className="w-10 h-10 bg-indigo-500/10 rounded-xl flex items-center justify-center group-hover:bg-indigo-500/20 transition-colors">
+                        <Users className="w-5 h-5 text-indigo-500" />
+                      </div>
+                      <div className="text-left">
+                        <p className="font-bold text-slate-900 text-sm">Manage Admin Accounts</p>
+                        <p className="text-xs text-slate-500">Add or edit system users</p>
+                      </div>
+                    </button>
                   </div>
                 </div>
 
@@ -759,6 +835,153 @@ export default function App() {
                 >
                   Close
                 </button>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {showAdminManagement && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[90] flex items-center justify-center p-6 bg-slate-900/40 backdrop-blur-sm"
+            >
+              <motion.div 
+                initial={{ scale: 0.95, y: 10 }}
+                animate={{ scale: 1, y: 0 }}
+                className="w-full max-w-2xl bg-white rounded-[40px] shadow-2xl border border-brand-border overflow-hidden"
+              >
+                <div className="p-8 md:p-10">
+                  <div className="flex items-center justify-between mb-8">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-2xl bg-indigo-100 flex items-center justify-center text-indigo-600">
+                        <Users className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">System Security</p>
+                        <h3 className="text-2xl font-serif font-black tracking-tight text-slate-900">Admin Management</h3>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => setShowAdminManagement(false)}
+                      className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 hover:text-black hover:bg-slate-100 transition-all"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {/* List of Admins */}
+                    <div className="space-y-4">
+                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Current Accounts</h4>
+                      <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                        {adminAccounts.map((acc) => (
+                          <div 
+                            key={acc.id}
+                            className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between group"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-900 font-bold text-xs">
+                                {acc.name.charAt(0)}
+                              </div>
+                              <div>
+                                <p className="text-sm font-bold text-slate-900">{acc.name}</p>
+                                <p className="text-[10px] text-slate-500 font-mono">@{acc.username}</p>
+                              </div>
+                            </div>
+                            {adminAccounts.length > 1 && (
+                              <div className="flex items-center gap-2">
+                                {deletingAccountId === acc.id ? (
+                                  <div className="flex items-center gap-1 animate-in fade-in slide-in-from-right-2">
+                                    <button 
+                                      onClick={async () => {
+                                        try {
+                                          await deleteDoc(doc(db, 'admin_accounts', acc.id));
+                                          setMessage({ type: 'success', text: 'Account deleted.' });
+                                          setDeletingAccountId(null);
+                                        } catch (e) {
+                                          setMessage({ type: 'error', text: 'Failed to delete.' });
+                                        }
+                                      }}
+                                      className="px-3 py-1.5 bg-red-500 text-white text-[10px] font-bold rounded-lg hover:bg-red-600 transition-all shadow-sm"
+                                    >
+                                      Confirm
+                                    </button>
+                                    <button 
+                                      onClick={() => setDeletingAccountId(null)}
+                                      className="p-1.5 bg-slate-200 text-slate-600 rounded-lg hover:bg-slate-300 transition-all"
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button 
+                                    onClick={() => setDeletingAccountId(acc.id)}
+                                    className="p-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all border border-transparent hover:border-red-100"
+                                    title="Delete Account"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Add New Admin */}
+                    <div className="space-y-6 bg-slate-50/50 p-6 rounded-3xl border border-slate-100">
+                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Add New Account</h4>
+                      <form 
+                        onSubmit={async (e) => {
+                          e.preventDefault();
+                          const formData = new FormData(e.currentTarget);
+                          const username = formData.get('username') as string;
+                          const password = formData.get('password') as string;
+                          const name = formData.get('name') as string;
+
+                          if (!username || !password || !name) return;
+
+                          try {
+                            await addDoc(collection(db, 'admin_accounts'), {
+                              username,
+                              password,
+                              name,
+                              role: 'admin'
+                            });
+                            (e.target as HTMLFormElement).reset();
+                            setMessage({ type: 'success', text: 'Account added successfully.' });
+                          } catch (err) {
+                            setMessage({ type: 'error', text: 'Failed to add account.' });
+                          }
+                        }}
+                        className="space-y-4"
+                      >
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Full Name</label>
+                          <input name="name" required placeholder="John Doe" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Username</label>
+                          <input name="username" required placeholder="johndoe" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Password</label>
+                          <input name="password" type="password" required placeholder="••••••••" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" />
+                        </div>
+                        <button 
+                          type="submit"
+                          className="w-full py-4 bg-indigo-600 text-white rounded-xl font-bold text-xs hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-600/20"
+                        >
+                          Create Account
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                </div>
               </motion.div>
             </motion.div>
           )}
@@ -790,9 +1013,25 @@ export default function App() {
                     <Settings className="w-8 h-8 text-slate-900" />
                   </div>
                   <h3 className="text-xl font-bold text-slate-900 mb-2">Admin Access</h3>
-                  <p className="text-slate-500 text-sm mb-8 leading-relaxed">Please enter the admin password to proceed with <strong>{showPasswordPrompt.title}</strong>.</p>
+                  <p className="text-slate-500 text-sm mb-8 leading-relaxed">Please enter your credentials to proceed with <strong>{showPasswordPrompt.title}</strong>.</p>
                   
                   <div className="space-y-4">
+                    <div className="relative">
+                      <input 
+                        type="text"
+                        value={adminUsername}
+                        onChange={(e) => {
+                          setAdminUsername(e.target.value);
+                          if (passwordError) setPasswordError(false);
+                        }}
+                        placeholder="Username"
+                        autoFocus
+                        className={cn(
+                          "input-field w-full text-center transition-all",
+                          passwordError && "border-red-500 bg-red-50 text-red-900 placeholder:text-red-300"
+                        )}
+                      />
+                    </div>
                     <div className="relative">
                       <input 
                         type="password"
@@ -802,8 +1041,7 @@ export default function App() {
                           if (passwordError) setPasswordError(false);
                         }}
                         onKeyDown={(e) => e.key === 'Enter' && verifyPassword()}
-                        placeholder="Enter Password"
-                        autoFocus
+                        placeholder="Password"
                         className={cn(
                           "input-field w-full text-center transition-all",
                           passwordError && "border-red-500 bg-red-50 text-red-900 placeholder:text-red-300"
@@ -823,14 +1061,22 @@ export default function App() {
                     <div className="flex flex-col gap-3">
                       <button 
                         onClick={verifyPassword}
+                        disabled={isVerifying}
                         className={cn(
                           "w-full py-4 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 shadow-lg",
                           passwordError 
                             ? "bg-red-500 text-white shadow-red-500/20" 
-                            : "bg-white border border-brand-border text-slate-900 shadow-black/5 hover:bg-slate-50"
+                            : "bg-white border border-brand-border text-slate-900 shadow-black/5 hover:bg-slate-50",
+                          isVerifying && "opacity-70 cursor-not-allowed"
                         )}
                       >
-                        {passwordError ? "Try Again" : "Verify & Continue"}
+                        {isVerifying ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : passwordError ? (
+                          "Try Again"
+                        ) : (
+                          "Verify & Continue"
+                        )}
                       </button>
                       <button 
                         onClick={() => {
@@ -855,53 +1101,108 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[70] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md"
+              className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/80 backdrop-blur-xl"
             >
               <motion.div 
                 initial={{ scale: 0.9, y: 20 }}
                 animate={{ scale: 1, y: 0 }}
-                className="w-full max-w-sm bg-white rounded-[40px] p-10 shadow-2xl text-center border border-brand-border"
+                exit={{ scale: 0.9, y: 20 }}
+                className="w-full max-w-md bg-white rounded-[40px] p-12 shadow-2xl text-center border border-brand-border relative overflow-hidden"
               >
-                <div className="relative w-24 h-24 mx-auto mb-8">
-                  <div className="absolute inset-0 border-4 border-slate-100 rounded-full"></div>
-                  <svg className="absolute inset-0 w-full h-full -rotate-90">
-                    <circle
-                      cx="48"
-                      cy="48"
-                      r="44"
-                      fill="none"
-                      stroke="black"
-                      strokeWidth="8"
-                      strokeDasharray={276}
-                      strokeDashoffset={276 - (276 * (importProgress.current / (importProgress.total || 1)))}
-                      strokeLinecap="round"
-                      className="transition-all duration-300"
-                    />
-                  </svg>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <Loader2 className="w-8 h-8 animate-spin text-black opacity-20" />
-                  </div>
-                </div>
+                {/* Decorative background elements */}
+                <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-500 via-emerald-500 to-orange-500"></div>
                 
-                <h3 className="text-2xl font-serif font-black tracking-tight text-slate-900 mb-2">Importing Data...</h3>
-                <p className="text-slate-500 text-sm mb-6">Processing your Excel file</p>
-                
-                <div className="bg-slate-50 rounded-2xl p-4 border border-brand-border">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Progress</span>
-                    <span className="text-[10px] font-bold text-slate-900 uppercase tracking-widest">
-                      {importProgress.current} / {importProgress.total}
-                    </span>
-                  </div>
-                  <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                    <motion.div 
-                      initial={{ width: 0 }}
-                      animate={{ width: `${(importProgress.current / (importProgress.total || 1)) * 100}%` }}
-                      className="h-full bg-black"
-                    />
-                  </div>
-                </div>
-                <p className="mt-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest animate-pulse">Please do not close this window</p>
+                {importStatus === 'importing' ? (
+                  <>
+                    <div className="relative w-32 h-32 mx-auto mb-10">
+                      <div className="absolute inset-0 border-8 border-slate-100 rounded-full"></div>
+                      <svg className="absolute inset-0 w-full h-full -rotate-90">
+                        <circle
+                          cx="64"
+                          cy="64"
+                          r="56"
+                          fill="none"
+                          stroke="url(#importGradient)"
+                          strokeWidth="12"
+                          strokeDasharray={351.8}
+                          strokeDashoffset={351.8 - (351.8 * (importProgress.current / (importProgress.total || 1)))}
+                          strokeLinecap="round"
+                          className="transition-all duration-500 ease-out"
+                        />
+                        <defs>
+                          <linearGradient id="importGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" stopColor="#3b82f6" />
+                            <stop offset="100%" stopColor="#10b981" />
+                          </linearGradient>
+                        </defs>
+                      </svg>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <span className="text-2xl font-black text-slate-900">
+                          {Math.round((importProgress.current / (importProgress.total || 1)) * 100)}%
+                        </span>
+                        <Loader2 className="w-5 h-5 animate-spin text-slate-300 mt-1" />
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2 mb-10">
+                      <h3 className="text-3xl font-serif font-black tracking-tight text-slate-900">Importing Data</h3>
+                      <p className="text-slate-500 font-medium">Synchronizing spare parts with database...</p>
+                    </div>
+                    
+                    <div className="bg-slate-50 rounded-[32px] p-8 border border-brand-border shadow-inner">
+                      <div className="flex justify-between items-end mb-4">
+                        <div className="text-left">
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Current Status</p>
+                          <p className="text-sm font-bold text-slate-900">
+                            {importProgress.current === importProgress.total ? 'Finalizing...' : `Processing Part ${importProgress.current}`}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Rows</p>
+                          <p className="text-sm font-bold text-slate-900">{importProgress.total}</p>
+                        </div>
+                      </div>
+                      
+                      <div className="w-full h-3 bg-slate-200 rounded-full overflow-hidden p-1 shadow-inner">
+                        <motion.div 
+                          initial={{ width: 0 }}
+                          animate={{ width: `${(importProgress.current / (importProgress.total || 1)) * 100}%` }}
+                          className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 rounded-full shadow-lg"
+                        />
+                      </div>
+                      
+                      <p className="mt-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest animate-pulse">
+                        Please do not close this window
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="py-4"
+                  >
+                    <div className="w-24 h-24 bg-emerald-500 rounded-[32px] flex items-center justify-center mx-auto mb-8 shadow-xl shadow-emerald-500/20">
+                      <CheckCircle2 className="w-12 h-12 text-white" />
+                    </div>
+                    
+                    <h3 className="text-4xl font-serif font-black tracking-tight text-slate-900 mb-4">Success!</h3>
+                    <p className="text-slate-500 font-medium mb-10 leading-relaxed">
+                      Successfully imported <span className="text-emerald-600 font-bold">{importProgress.total}</span> unique spare parts for the <span className="text-slate-900 font-bold">{importTeam}</span> team.
+                    </p>
+                    
+                    <button 
+                      onClick={() => {
+                        setIsImporting(false);
+                        setImportStatus('idle');
+                        setShowSettings(false);
+                      }}
+                      className="w-full py-5 bg-slate-900 text-white rounded-[24px] font-black uppercase tracking-widest text-xs hover:bg-black transition-all shadow-xl shadow-black/10"
+                    >
+                      Finish & Close
+                    </button>
+                  </motion.div>
+                )}
               </motion.div>
             </motion.div>
           )}
@@ -1320,7 +1621,6 @@ export default function App() {
                       {team.icon}
                     </div>
                     <h3 className="text-2xl font-black tracking-tighter text-slate-900 mb-2">{team.name}</h3>
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">{team.desc}</p>
                     <div className="w-full py-3 bg-slate-50 rounded-xl text-[10px] font-bold uppercase tracking-widest text-slate-400 group-hover:bg-black group-hover:text-white transition-all">
                       Select Team
                     </div>
@@ -1726,85 +2026,51 @@ export default function App() {
                 </div>
 
                 <p className="text-sm text-slate-500 mb-8">
-                  {selectedVerifier 
-                    ? `Enter password to authorize ${selectedVerifier.name}.` 
-                    : "Please select an authorized verifier to approve this spare part withdrawal."}
+                  Please enter your admin credentials to approve this spare part withdrawal.
                 </p>
 
-                <div className="space-y-4">
-                  {!selectedVerifier ? (
-                    <div className="space-y-3 max-h-[300px] overflow-y-auto custom-scrollbar pr-2">
-                      {verifiers.map((verifier) => (
-                        <button
-                          key={verifier.id}
-                          onClick={() => setSelectedVerifier(verifier)}
-                          className="w-full flex items-center justify-between p-4 rounded-2xl border border-slate-100 bg-slate-50/50 hover:bg-white hover:border-emerald-200 hover:shadow-md hover:shadow-emerald-100/50 transition-all group"
-                        >
-                          <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-900 font-bold text-xs">
-                              {verifier.name.charAt(0)}
-                            </div>
-                            <div className="text-left">
-                              <p className="text-sm font-bold text-slate-900 group-hover:text-emerald-600 transition-colors">{verifier.name}</p>
-                              <p className="text-[10px] font-medium text-slate-400 uppercase tracking-widest">{verifier.role} • {verifier.employeeId}</p>
-                            </div>
-                          </div>
-                          <ArrowRightLeft className="w-4 h-4 text-slate-300 group-hover:text-emerald-500 transition-colors" />
-                        </button>
-                      ))}
+                <div className="space-y-6">
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Username</label>
+                      <input
+                        type="text"
+                        value={adminUsername}
+                        onChange={(e) => setAdminUsername(e.target.value)}
+                        placeholder="Username"
+                        className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                        autoFocus
+                      />
                     </div>
-                  ) : (
-                    <div className="space-y-6">
-                      <div className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100">
-                        <div className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-900 font-bold text-xs">
-                          {selectedVerifier.name.charAt(0)}
-                        </div>
-                        <div className="text-left">
-                          <p className="text-sm font-bold text-slate-900">{selectedVerifier.name}</p>
-                          <p className="text-[10px] font-medium text-slate-400 uppercase tracking-widest">{selectedVerifier.role}</p>
-                        </div>
-                        <button 
-                          onClick={() => {
-                            setSelectedVerifier(null);
-                            setVerifierPasswordInput('');
-                          }}
-                          className="ml-auto text-[10px] font-bold text-emerald-600 hover:underline uppercase tracking-widest"
-                        >
-                          Change
-                        </button>
-                      </div>
-
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Admin Password</label>
-                        <input
-                          type="password"
-                          value={verifierPasswordInput}
-                          onChange={(e) => setVerifierPasswordInput(e.target.value)}
-                          placeholder="Enter 5-digit password"
-                          className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
-                          autoFocus
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleVerifyTransaction(showVerifierModal, selectedVerifier.name);
-                          }}
-                        />
-                      </div>
-
-                      <button
-                        onClick={() => handleVerifyTransaction(showVerifierModal, selectedVerifier.name)}
-                        className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-bold text-xs hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 active:scale-[0.98]"
-                      >
-                        Confirm Authorization
-                      </button>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Password</label>
+                      <input
+                        type="password"
+                        value={adminPassword}
+                        onChange={(e) => setAdminPassword(e.target.value)}
+                        placeholder="Password"
+                        className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleVerifyTransaction(showVerifierModal);
+                        }}
+                      />
                     </div>
-                  )}
+                  </div>
+
+                  <button
+                    onClick={() => handleVerifyTransaction(showVerifierModal)}
+                    className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-bold text-xs hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 active:scale-[0.98]"
+                  >
+                    Confirm Authorization
+                  </button>
                 </div>
 
                 <div className="mt-8 pt-8 border-t border-slate-100">
                   <button 
                     onClick={() => {
                       setShowVerifierModal(null);
-                      setSelectedVerifier(null);
-                      setVerifierPasswordInput('');
+                      setAdminUsername('');
+                      setAdminPassword('');
                     }}
                     className="w-full py-4 bg-slate-50 text-slate-400 rounded-2xl font-bold text-xs hover:bg-slate-100 hover:text-slate-600 transition-all"
                   >
