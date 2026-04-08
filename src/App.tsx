@@ -772,7 +772,7 @@ export default function App() {
 
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <header className="px-6 py-4 flex flex-col md:flex-row items-center md:justify-between gap-6 border-b border-slate-100/50 bg-white/30 backdrop-blur-md">
+        <header className="px-6 py-2 flex flex-col md:flex-row items-center md:justify-between gap-6 border-b border-slate-100/50 bg-white/30 backdrop-blur-md">
           <div className="lg:hidden w-48 md:w-56 flex items-center justify-center">
             <Logo dark={true} />
           </div>
@@ -789,7 +789,7 @@ export default function App() {
           </div>
         </header>
 
-        <main className="flex-1 p-6 lg:p-8 overflow-y-auto relative">
+        <main className="flex-1 px-6 py-3 lg:px-8 lg:py-4 overflow-y-auto relative">
           <AnimatePresence mode="wait">
           {showSettings && (
             <motion.div 
@@ -1465,7 +1465,7 @@ export default function App() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="space-y-6"
+              className="space-y-4"
             >
               {/* Header Section */}
               <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
