@@ -18,13 +18,28 @@
       "type": "object",
       "properties": {
         "partBarcode": { "type": "string", "description": "Barcode of the part." },
-        "technicianId": { "type": "string", "description": "UID of the technician." },
+        "partName": { "type": "string", "description": "Name of the part." },
         "technicianName": { "type": "string", "description": "Name of the technician." },
+        "team": { "type": "string", "description": "Team of the technician." },
         "action": { "type": "string", "enum": ["take", "return"], "description": "Action performed." },
+        "quantity": { "type": "number", "description": "Quantity of parts." },
         "notes": { "type": "string", "description": "Technician's notes/description." },
-        "timestamp": { "type": "string", "format": "date-time", "description": "When the action occurred." }
+        "timestamp": { "type": "string", "format": "date-time", "description": "When the action occurred." },
+        "status": { "type": "string", "enum": ["open", "close"], "description": "Verification status." },
+        "verifiedBy": { "type": "string", "description": "Name of the verifier." }
       },
-      "required": ["partBarcode", "technicianId", "action", "timestamp"]
+      "required": ["partBarcode", "technicianName", "action", "timestamp", "status"]
+    },
+    "Verifier": {
+      "title": "Authorized Verifier",
+      "description": "User authorized to verify spare part transactions.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Full name of the verifier." },
+        "employeeId": { "type": "string", "description": "Employee ID of the verifier." },
+        "role": { "type": "string", "description": "Role or position of the verifier." }
+      },
+      "required": ["name", "employeeId"]
     }
   },
   "firestore": {
@@ -35,6 +50,10 @@
     "transactions": {
       "schema": "Transaction",
       "description": "Log of all spare part movements."
+    },
+    "verifiers": {
+      "schema": "Verifier",
+      "description": "List of authorized verifiers."
     }
   }
 }

@@ -76,6 +76,13 @@ interface Transaction {
   verifiedBy?: string;
 }
 
+interface Verifier {
+  id: string;
+  name: string;
+  employeeId: string;
+  role: string;
+}
+
 // --- Constants ---
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -130,8 +137,11 @@ export default function App() {
   const [currentPart, setCurrentPart] = useState<SparePart | null>(null);
   const [parts, setParts] = useState<SparePart[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [selectedTransactionId, setSelectedTransactionId] = useState<string | null>(null);
+  const [verifiers, setVerifiers] = useState<Verifier[]>([]);
   const [showPartDetailsModal, setShowPartDetailsModal] = useState<SparePart | null>(null);
+  const [showVerifierModal, setShowVerifierModal] = useState<string | null>(null); // Stores txId
+  const [selectedVerifier, setSelectedVerifier] = useState<Verifier | null>(null);
+  const [verifierPasswordInput, setVerifierPasswordInput] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [manualBarcode, setManualBarcode] = useState('');
@@ -142,7 +152,6 @@ export default function App() {
     testerParts: 0,
     automationParts: 0
   });
-  const [dashboardTeamTab, setDashboardTeamTab] = useState<'ALL' | 'FCT' | 'TESTER' | 'AUTOMATION'>('ALL');
   const [importTeam, setImportTeam] = useState<'FCT' | 'TESTER' | 'AUTOMATION'>('FCT');
   const [filterMonth, setFilterMonth] = useState<string>(new Date().toLocaleString('default', { month: 'long' }));
   const [filterYear, setFilterYear] = useState<string>(new Date().getFullYear().toString());
@@ -250,9 +259,34 @@ export default function App() {
       }));
     });
 
+    // Fetch Verifiers
+    const unsubscribeVerifiers = onSnapshot(collection(db, 'verifiers'), (snapshot) => {
+      const verifierData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Verifier));
+      
+      // Ensure exactly one "Spare Part Control" exists with a fixed ID
+      // If there are multiple docs, or the name is wrong, or it's empty, reset it.
+      const hasCorrectSingleVerifier = verifierData.length === 1 && 
+                                       verifierData[0].name === 'Spare Part Control' &&
+                                       snapshot.docs[0].id === 'admin-control';
+      
+      if (!hasCorrectSingleVerifier) {
+        // Clear ALL existing verifiers to avoid duplicates
+        snapshot.docs.forEach(d => deleteDoc(doc(db, 'verifiers', d.id)));
+        
+        // Use setDoc with a fixed ID to prevent multiple entries
+        setDoc(doc(db, 'verifiers', 'admin-control'), {
+          name: 'Spare Part Control',
+          employeeId: 'V002',
+          role: 'Admin'
+        });
+      }
+      setVerifiers(verifierData.filter(v => v.name === 'Spare Part Control'));
+    });
+
     return () => {
       unsubscribe();
       unsubscribeParts();
+      unsubscribeVerifiers();
     };
   }, []);
 
@@ -524,12 +558,9 @@ export default function App() {
     
     const monthMatch = date.toLocaleString('default', { month: 'long' }) === filterMonth;
     const yearMatch = date.getFullYear().toString() === filterYear;
-    const teamMatch = dashboardTeamTab === 'ALL' || tx.team === dashboardTeamTab;
     
-    return monthMatch && yearMatch && teamMatch;
+    return monthMatch && yearMatch;
   });
-
-  const selectedTx = filteredTransactions.find(t => t.id === selectedTransactionId) || filteredTransactions[0];
 
   const handleViewPartDetails = (barcode: string) => {
     const part = parts.find(p => p.barcode === barcode);
@@ -541,14 +572,23 @@ export default function App() {
     }
   };
 
-  const handleVerifyTransaction = async (txId: string) => {
+  const handleVerifyTransaction = async (txId: string, verifierName: string) => {
+    if (verifierPasswordInput !== '12345') {
+      setMessage({ type: 'error', text: 'Incorrect verifier password!' });
+      setTimeout(() => setMessage(null), 3000);
+      return;
+    }
+
     try {
       const txRef = doc(db, 'transactions', txId);
       await updateDoc(txRef, {
         status: 'close',
-        verifiedBy: 'Spare Part Control' // Mocking the control user
+        verifiedBy: verifierName
       });
-      setMessage({ type: 'success', text: 'Transaction verified successfully.' });
+      setMessage({ type: 'success', text: `Transaction verified by ${verifierName}.` });
+      setShowVerifierModal(null);
+      setSelectedVerifier(null);
+      setVerifierPasswordInput('');
     } catch (error) {
       console.error("Verification failed", error);
       setMessage({ type: 'error', text: 'Failed to verify transaction.' });
@@ -1127,158 +1167,124 @@ export default function App() {
               </div>
 
               {/* Recent Activity Section */}
-              <div className="bg-white rounded-[40px] shadow-sm border border-brand-border overflow-hidden">
-                <div className="p-8 border-b border-slate-50 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    {['ALL', 'FCT', 'TESTER', 'AUTOMATION'].map((tab) => (
-                      <button 
-                        key={tab}
-                        onClick={() => setDashboardTeamTab(tab as any)}
-                        className={cn(
-                          "px-6 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all",
-                          dashboardTeamTab === tab 
-                            ? "bg-white border border-brand-border text-slate-900 shadow-lg shadow-black/5" 
-                            : "text-slate-400 hover:text-slate-900 hover:bg-slate-50"
-                        )}
-                      >
-                        {tab}
-                      </button>
-                    ))}
+              <div className="space-y-8">
+                <div className="flex items-center justify-between px-4">
+                  <div className="flex items-center gap-4">
+                    <h4 className="text-2xl font-serif font-black tracking-tight text-slate-900">Recent Activity</h4>
+                    <span className="px-3 py-1 bg-slate-100 rounded-full text-[10px] font-bold text-slate-500 uppercase tracking-widest border border-slate-200">
+                      Live Feed
+                    </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-400">
+                    <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-400 border border-slate-100">
                       <LayoutDashboard className="w-4 h-4" />
                     </div>
-                    <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-400">
+                    <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-400 border border-slate-100">
                       <Settings className="w-4 h-4" />
                     </div>
                   </div>
                 </div>
+                
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {['FCT', 'TESTER', 'AUTOMATION'].map((team) => {
+                    const teamTransactions = filteredTransactions.filter(tx => tx.team === team);
+                    return (
+                      <div key={team} className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden flex flex-col h-[600px]">
+                        {/* Column Header */}
+                        <div className="p-5 border-b border-slate-50 bg-slate-50/30 flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className={cn(
+                              "w-1.5 h-5 rounded-full",
+                              team === 'FCT' ? "bg-blue-500" :
+                              team === 'TESTER' ? "bg-emerald-500" :
+                              "bg-orange-500"
+                            )} />
+                            <h5 className="text-xs font-black text-slate-900 tracking-tight uppercase">{team} TEAM</h5>
+                          </div>
+                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-white px-2 py-1 rounded-md border border-slate-100">
+                            {teamTransactions.length} TX
+                          </span>
+                        </div>
 
-                <div className="p-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
-                  {/* List View */}
-                  <div className="lg:col-span-4 space-y-4">
-                    <h4 className="text-xs font-bold text-slate-900 uppercase tracking-widest mb-6">Recent Activity</h4>
-                    <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
-                      {filteredTransactions.map((tx) => (
-                        <div 
-                          key={tx.id} 
-                          onClick={() => setSelectedTransactionId(tx.id)}
-                          className={cn(
-                            "flex items-center justify-between p-4 rounded-2xl transition-all group cursor-pointer border",
-                            (selectedTransactionId === tx.id || (!selectedTransactionId && filteredTransactions[0]?.id === tx.id))
-                              ? "bg-slate-50 border-slate-200 shadow-sm" 
-                              : "hover:bg-slate-50 border-transparent hover:border-slate-100"
-                          )}
-                        >
-                          <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-900 font-bold text-xs uppercase">
-                              {tx.technicianName.charAt(0)}
-                            </div>
-                            <div>
-                              <p className="text-sm font-bold text-slate-900">#{tx.partBarcode}</p>
-                              <div className="flex items-center gap-2">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{tx.timestamp?.toDate().toLocaleDateString([], { day: 'numeric', month: 'short' })}</p>
-                                <span className={cn(
-                                  "text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-md",
-                                  tx.status === 'open' ? "bg-amber-50 text-amber-600 border border-amber-100" : "bg-emerald-50 text-emerald-600 border border-emerald-100"
-                                )}>
-                                  {tx.status}
-                                </span>
+                        {/* Scrollable List Body */}
+                        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3">
+                          {teamTransactions.map((tx) => (
+                            <div 
+                              key={tx.id}
+                              className="group relative bg-white border border-slate-50 rounded-2xl p-4 hover:border-slate-200 hover:shadow-md hover:shadow-slate-200/20 transition-all cursor-default"
+                            >
+                              <div className="flex items-start justify-between mb-3">
+                                <div className="flex items-center gap-2.5">
+                                  <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-slate-900 font-bold text-[9px] uppercase border border-slate-200">
+                                    {tx.technicianName.charAt(0)}
+                                  </div>
+                                  <div>
+                                    <p className="text-[11px] font-bold text-slate-900 leading-none mb-1">{tx.technicianName}</p>
+                                    <p className="text-[9px] font-medium text-slate-400 uppercase tracking-tighter">
+                                      {tx.timestamp?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })} • {tx.timestamp?.toDate().toLocaleDateString([], { day: '2-digit', month: 'short' })}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <div className="w-7 h-7 rounded-lg bg-slate-900 text-white flex items-center justify-center">
+                                    <span className="text-[10px] font-black">{tx.quantity}</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="space-y-1">
+                                <p className="text-[11px] font-bold text-slate-800 truncate">#{tx.partBarcode}</p>
+                                <p className="text-[10px] text-slate-400 truncate leading-tight">{tx.partName || 'Unknown Part'}</p>
+                              </div>
+
+                              {tx.notes && (
+                                <div className="mt-3 pt-3 border-t border-slate-50">
+                                  <p className="text-[10px] text-slate-500 italic line-clamp-1">"{tx.notes}"</p>
+                                </div>
+                              )}
+
+                              {tx.status === 'close' && tx.verifiedBy && (
+                                <div className="mt-3 pt-3 border-t border-slate-50 flex items-center gap-2">
+                                  <div className="w-5 h-5 rounded-full bg-emerald-50 flex items-center justify-center">
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                                  </div>
+                                  <p className="text-[9px] font-bold text-emerald-600 uppercase tracking-widest">
+                                    Approved by {tx.verifiedBy}
+                                  </p>
+                                </div>
+                              )}
+
+                              <div className="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                {tx.status === 'open' && (
+                                  <button 
+                                    onClick={() => setShowVerifierModal(tx.id)}
+                                    className="p-1.5 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-all shadow-sm"
+                                    title="Verify"
+                                  >
+                                    <CheckCircle2 className="w-3 h-3" />
+                                  </button>
+                                )}
+                                <button 
+                                  onClick={() => handleViewPartDetails(tx.partBarcode)}
+                                  className="p-1.5 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-all shadow-sm"
+                                  title="View Details"
+                                >
+                                  <Box className="w-3 h-3" />
+                                </button>
                               </div>
                             </div>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-sm font-black text-slate-900">{tx.quantity} Units</p>
-                            <span className={cn(
-                              "text-[8px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md",
-                              tx.team === 'FCT' ? "bg-blue-50 text-blue-600" :
-                              tx.team === 'TESTER' ? "bg-emerald-50 text-emerald-600" :
-                              "bg-orange-50 text-orange-600"
-                            )}>
-                              {tx.team}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                      {filteredTransactions.length === 0 && (
-                        <div className="py-12 text-center text-slate-400 text-xs italic">
-                          No activity for this period.
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Detail View (Mocked from image style) */}
-                  <div className="lg:col-span-8 bg-white border border-brand-border rounded-[32px] p-10 text-slate-900 relative overflow-hidden">
-                    <div className="relative z-10">
-                      <div className="flex items-center justify-between mb-12">
-                        <div>
-                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Transaction Details</p>
-                          <div className="flex items-center gap-3">
-                            <h3 className="text-4xl font-serif font-black tracking-tighter">
-                              {selectedTx ? `#${selectedTx.partBarcode}` : 'No Data'}
-                            </h3>
-                            {selectedTx && (
-                              <span className={cn(
-                                "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border",
-                                selectedTx.status === 'open' ? "bg-amber-50 text-amber-600 border-amber-200" : "bg-emerald-50 text-emerald-600 border-emerald-200"
-                              )}>
-                                {selectedTx.status}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Team</p>
-                          <p className="text-2xl font-serif font-black">{selectedTx?.team || '-'}</p>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-3 gap-8 mb-12">
-                        <div>
-                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Technician</p>
-                          <p className="text-lg font-bold">{selectedTx?.technicianName || '-'}</p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Quantity</p>
-                          <p className="text-lg font-bold">{selectedTx?.quantity || 0} Units</p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Date</p>
-                          <p className="text-lg font-bold">{selectedTx?.timestamp?.toDate().toLocaleDateString() || '-'}</p>
-                        </div>
-                      </div>
-
-                      <div className="pt-10 border-t border-white/10 flex items-center justify-between">
-                        <div>
-                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Part Name</p>
-                          <p className="text-xl font-bold">{selectedTx?.partName || '-'}</p>
-                          {selectedTx?.verifiedBy && (
-                            <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mt-1">Verified by: {selectedTx.verifiedBy}</p>
+                          ))}
+                          
+                          {teamTransactions.length === 0 && (
+                            <div className="h-full flex flex-col items-center justify-center opacity-20 py-20">
+                              <History className="w-10 h-10 mb-2" />
+                              <p className="text-[10px] font-bold uppercase tracking-widest">No Activity</p>
+                            </div>
                           )}
                         </div>
-                        <div className="flex items-center gap-4">
-                          {selectedTx && selectedTx.status === 'open' && (
-                            <button 
-                              onClick={() => handleVerifyTransaction(selectedTx.id)}
-                              className="px-8 py-4 bg-black text-white rounded-2xl font-bold text-xs hover:bg-slate-800 transition-all shadow-lg shadow-black/10"
-                            >
-                              Verify Transaction
-                            </button>
-                          )}
-                          <button 
-                            onClick={() => selectedTx && handleViewPartDetails(selectedTx.partBarcode)}
-                            className="px-8 py-4 bg-brand-accent text-white rounded-2xl font-bold text-xs hover:bg-brand-accent/90 transition-all shadow-lg shadow-brand-accent/20"
-                          >
-                            View Part Details
-                          </button>
-                        </div>
                       </div>
-                    </div>
-                    {/* Decorative background */}
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-                  </div>
+                    );
+                  })}
                 </div>
               </div>
             </motion.div>
@@ -1687,6 +1693,131 @@ export default function App() {
                     className="px-10 py-4 bg-black text-white rounded-2xl font-bold text-xs hover:bg-slate-800 transition-all shadow-lg shadow-black/10"
                   >
                     Close Details
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {showVerifierModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowVerifierModal(null)}
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-lg bg-white rounded-[40px] shadow-2xl overflow-hidden border border-brand-border"
+            >
+              <div className="p-8 md:p-10">
+                <div className="flex items-center justify-between mb-8">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-emerald-100 flex items-center justify-center text-emerald-600">
+                      <CheckCircle2 className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Authorization Required</p>
+                      <h3 className="text-2xl font-serif font-black tracking-tight text-slate-900">Verify Transaction</h3>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setShowVerifierModal(null)}
+                    className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 hover:text-black hover:bg-slate-100 transition-all"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <p className="text-sm text-slate-500 mb-8">
+                  {selectedVerifier 
+                    ? `Enter password to authorize ${selectedVerifier.name}.` 
+                    : "Please select an authorized verifier to approve this spare part withdrawal."}
+                </p>
+
+                <div className="space-y-4">
+                  {!selectedVerifier ? (
+                    <div className="space-y-3 max-h-[300px] overflow-y-auto custom-scrollbar pr-2">
+                      {verifiers.map((verifier) => (
+                        <button
+                          key={verifier.id}
+                          onClick={() => setSelectedVerifier(verifier)}
+                          className="w-full flex items-center justify-between p-4 rounded-2xl border border-slate-100 bg-slate-50/50 hover:bg-white hover:border-emerald-200 hover:shadow-md hover:shadow-emerald-100/50 transition-all group"
+                        >
+                          <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-900 font-bold text-xs">
+                              {verifier.name.charAt(0)}
+                            </div>
+                            <div className="text-left">
+                              <p className="text-sm font-bold text-slate-900 group-hover:text-emerald-600 transition-colors">{verifier.name}</p>
+                              <p className="text-[10px] font-medium text-slate-400 uppercase tracking-widest">{verifier.role} • {verifier.employeeId}</p>
+                            </div>
+                          </div>
+                          <ArrowRightLeft className="w-4 h-4 text-slate-300 group-hover:text-emerald-500 transition-colors" />
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      <div className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                        <div className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-900 font-bold text-xs">
+                          {selectedVerifier.name.charAt(0)}
+                        </div>
+                        <div className="text-left">
+                          <p className="text-sm font-bold text-slate-900">{selectedVerifier.name}</p>
+                          <p className="text-[10px] font-medium text-slate-400 uppercase tracking-widest">{selectedVerifier.role}</p>
+                        </div>
+                        <button 
+                          onClick={() => {
+                            setSelectedVerifier(null);
+                            setVerifierPasswordInput('');
+                          }}
+                          className="ml-auto text-[10px] font-bold text-emerald-600 hover:underline uppercase tracking-widest"
+                        >
+                          Change
+                        </button>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Admin Password</label>
+                        <input
+                          type="password"
+                          value={verifierPasswordInput}
+                          onChange={(e) => setVerifierPasswordInput(e.target.value)}
+                          placeholder="Enter 5-digit password"
+                          className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleVerifyTransaction(showVerifierModal, selectedVerifier.name);
+                          }}
+                        />
+                      </div>
+
+                      <button
+                        onClick={() => handleVerifyTransaction(showVerifierModal, selectedVerifier.name)}
+                        className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-bold text-xs hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 active:scale-[0.98]"
+                      >
+                        Confirm Authorization
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-8 pt-8 border-t border-slate-100">
+                  <button 
+                    onClick={() => {
+                      setShowVerifierModal(null);
+                      setSelectedVerifier(null);
+                      setVerifierPasswordInput('');
+                    }}
+                    className="w-full py-4 bg-slate-50 text-slate-400 rounded-2xl font-bold text-xs hover:bg-slate-100 hover:text-slate-600 transition-all"
+                  >
+                    Cancel Verification
                   </button>
                 </div>
               </div>

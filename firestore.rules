@@ -17,11 +17,22 @@ service cloud.firestore {
     // Document ID: auto-generated
     // Fields:
     //   - partBarcode: string (required)
-    //   - technicianId: string (required)
-    //   - technicianName: string (optional)
+    //   - partName: string (optional)
+    //   - technicianName: string (required)
+    //   - team: string (optional)
     //   - action: string (required, 'take' or 'return')
+    //   - quantity: number (required)
     //   - notes: string (optional)
     //   - timestamp: timestamp (required)
+    //   - status: string (required, 'open' or 'close')
+    //   - verifiedBy: string (optional)
+    //
+    // Collection: verifiers
+    // Document ID: auto-generated
+    // Fields:
+    //   - name: string (required)
+    //   - employeeId: string (required)
+    //   - role: string (optional)
     //
     // ===============================================================
 
@@ -33,11 +44,18 @@ service cloud.firestore {
     }
 
     function isValidTransaction(data) {
-      return data.keys().hasAll(['partBarcode', 'technicianName', 'action', 'timestamp']) &&
+      return data.keys().hasAll(['partBarcode', 'technicianName', 'action', 'timestamp', 'status']) &&
              data.partBarcode is string &&
              data.technicianName is string && data.technicianName.size() > 0 &&
              data.action in ['take', 'return'] &&
-             data.timestamp is timestamp;
+             data.timestamp is timestamp &&
+             data.status in ['open', 'close'];
+    }
+
+    function isValidVerifier(data) {
+      return data.keys().hasAll(['name', 'employeeId']) &&
+             data.name is string && data.name.size() > 0 &&
+             data.employeeId is string && data.employeeId.size() > 0;
     }
 
     // Spareparts collection
@@ -51,7 +69,15 @@ service cloud.firestore {
     match /transactions/{transactionId} {
       allow read: if true;
       allow create: if isValidTransaction(request.resource.data);
-      allow update, delete: if true;
+      allow update: if isValidTransaction(request.resource.data);
+      allow delete: if true;
+    }
+
+    // Verifiers collection
+    match /verifiers/{verifierId} {
+      allow read: if true;
+      allow create, update: if isValidVerifier(request.resource.data);
+      allow delete: if true;
     }
 
     // Users collection (for profile info if needed)
