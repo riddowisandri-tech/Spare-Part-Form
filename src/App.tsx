@@ -772,7 +772,7 @@ export default function App() {
 
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <header className="px-6 py-8 flex flex-col md:flex-row items-center md:justify-between gap-6 border-b border-slate-100/50 bg-white/30 backdrop-blur-md">
+        <header className="px-6 py-4 flex flex-col md:flex-row items-center md:justify-between gap-6 border-b border-slate-100/50 bg-white/30 backdrop-blur-md">
           <div className="lg:hidden w-48 md:w-56 flex items-center justify-center">
             <Logo dark={true} />
           </div>
@@ -789,7 +789,7 @@ export default function App() {
           </div>
         </header>
 
-        <main className="flex-1 p-8 lg:p-12 overflow-y-auto relative">
+        <main className="flex-1 p-6 lg:p-8 overflow-y-auto relative">
           <AnimatePresence mode="wait">
           {showSettings && (
             <motion.div 
@@ -1465,7 +1465,7 @@ export default function App() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="space-y-10"
+              className="space-y-6"
             >
               {/* Header Section */}
               <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
@@ -1476,10 +1476,10 @@ export default function App() {
                 <div className="flex items-center gap-3">
                   <button 
                     onClick={() => setView('team-select')}
-                    className="btn-primary flex items-center gap-2"
+                    className="btn-primary flex items-center justify-center w-12 h-12 !p-0 rounded-2xl"
+                    title="New Transaction"
                   >
-                    <Plus className="w-4 h-4" />
-                    New Transaction
+                    <Plus className="w-6 h-6" />
                   </button>
                 </div>
               </div>
@@ -1526,22 +1526,31 @@ export default function App() {
                               className="p-4 rounded-2xl bg-slate-50/50 border border-slate-100/50 hover:bg-white hover:shadow-soft-sm transition-all duration-300"
                             >
                               <div className="flex items-start justify-between mb-3">
-                                <div className="flex items-center gap-3">
-                                  <div className="w-8 h-8 rounded-xl bg-white shadow-sm flex items-center justify-center text-slate-900 font-bold text-[10px]">
+                                <div className="flex gap-3 flex-1">
+                                  <div className="w-8 h-8 rounded-xl bg-white shadow-sm flex items-center justify-center text-slate-900 font-bold text-[10px] shrink-0">
                                     {tx.technicianName.charAt(0)}
                                   </div>
-                                  <div>
-                                    <p className="text-[11px] font-bold text-slate-900 leading-none mb-1">{tx.technicianName}</p>
-                                    <p className="text-[9px] font-medium text-slate-400">
-                                      {tx.timestamp?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                    </p>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div>
+                                        <p className="text-[11px] font-bold text-slate-900 leading-none mb-1">{tx.technicianName}</p>
+                                        <p className="text-[9px] font-medium text-slate-400">
+                                          {tx.timestamp?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </p>
+                                      </div>
+                                      {tx.notes && (
+                                        <div className="px-2 py-1 bg-amber-50/50 rounded-lg border border-amber-100/50 max-w-[100px]">
+                                          <p className="text-[9px] text-amber-700 italic truncate" title={tx.notes}>{tx.notes}</p>
+                                        </div>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
-                                <span className="px-2 py-1 bg-slate-900 text-white rounded-lg text-[10px] font-bold">
+                                <span className="px-2 py-1 bg-slate-900 text-white rounded-lg text-[10px] font-bold ml-2">
                                   {tx.quantity}
                                 </span>
                               </div>
-                              <p className="text-[11px] font-bold text-slate-800 mb-1 truncate">#{tx.partBarcode}</p>
+                              <p className="text-[11px] font-bold text-slate-800 mb-1 truncate">{tx.partBarcode}</p>
                               <p className="text-[10px] text-slate-400 truncate">{tx.partName}</p>
                               
                               {tx.status === 'open' && (
