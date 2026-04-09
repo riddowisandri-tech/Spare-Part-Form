@@ -786,21 +786,95 @@ export default function App() {
 
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <header className="px-6 py-2 flex flex-col md:flex-row items-center md:justify-between gap-6 border-b border-slate-100/50 bg-white/30 backdrop-blur-md">
-          <div className="lg:hidden w-48 md:w-56 flex items-center justify-center">
-            <Logo dark={true} />
+        <header className="px-3 py-2 lg:px-6 lg:py-2 flex flex-col gap-2 border-b border-white/5 lg:border-slate-100/50 bg-brand-sidebar lg:bg-white/30 lg:backdrop-blur-md sticky top-0 z-30">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="lg:hidden w-12 md:w-14 shrink-0">
+                <Logo dark={false} />
+              </div>
+              <div className="lg:hidden h-4 w-[1px] bg-white/10 mx-0.5"></div>
+              <h1 className="lg:hidden text-[11px] md:text-sm font-serif font-black tracking-tighter bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent leading-none truncate">
+                Spare Parts Form System
+              </h1>
+            </div>
+            
+            {/* Mobile/Tablet Navigation - Top */}
+            <nav className="lg:hidden flex items-center gap-0.5">
+              <button 
+                onClick={() => setView('home')} 
+                className={cn(
+                  "flex flex-col items-center gap-0.5 transition-all duration-300 px-2 py-1 rounded-lg",
+                  view === 'home' ? "text-white bg-white/10" : "text-slate-400 hover:text-white"
+                )}
+              >
+                <LayoutDashboard className="w-3.5 h-3.5" />
+                <span className="text-[7px] font-bold uppercase tracking-widest">Home</span>
+              </button>
+              
+              <button 
+                onClick={() => setView('team-select')} 
+                className={cn(
+                  "flex flex-col items-center gap-0.5 transition-all duration-300 px-2 py-1 rounded-lg",
+                  (view === 'scan' || view === 'team-select') ? "text-white bg-white/10" : "text-slate-400 hover:text-white"
+                )}
+              >
+                <Scan className="w-3.5 h-3.5" />
+                <span className="text-[7px] font-bold uppercase tracking-widest">Scan</span>
+              </button>
+              
+              <button 
+                onClick={() => setView('history')} 
+                className={cn(
+                  "flex flex-col items-center gap-0.5 transition-all duration-300 px-2 py-1 rounded-lg",
+                  view === 'history' ? "text-white bg-white/10" : "text-slate-400 hover:text-white"
+                )}
+              >
+                <History className="w-3.5 h-3.5" />
+                <span className="text-[7px] font-bold uppercase tracking-widest">Logs</span>
+              </button>
+
+              <button 
+                onClick={() => setShowSettings(true)}
+                className="flex flex-col items-center gap-0.5 transition-all duration-300 px-2 py-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/5"
+              >
+                <Settings className="w-3.5 h-3.5" />
+                <span className="text-[7px] font-bold uppercase tracking-widest">Settings</span>
+              </button>
+
+              <div className="w-[1px] h-5 bg-white/10 mx-0.5"></div>
+
+              <button 
+                onClick={() => loggedInAdmin ? setLoggedInAdmin(null) : setShowPasswordPrompt({ title: 'Admin Login', action: () => {} })}
+                className={cn(
+                  "flex flex-col items-center gap-0.5 transition-all duration-300 px-2 py-1 rounded-lg",
+                  loggedInAdmin ? "text-indigo-400 bg-white/5" : "text-slate-400 hover:text-white"
+                )}
+              >
+                {loggedInAdmin ? <LogOut className="w-3.5 h-3.5" /> : <UserIcon className="w-3.5 h-3.5" />}
+                <span className="text-[7px] font-bold uppercase tracking-widest">{loggedInAdmin ? 'Logout' : 'Login'}</span>
+              </button>
+            </nav>
           </div>
-          <div className="text-center md:text-left flex-1 flex flex-col md:flex-row md:items-center gap-4">
-            <h1 className="text-3xl md:text-4xl lg:text-5xl font-serif font-black tracking-tighter bg-gradient-to-r from-slate-900 to-slate-500 bg-clip-text text-transparent drop-shadow-2xl leading-tight">
+
+          <div className="hidden lg:flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <h1 className="text-2xl md:text-4xl lg:text-5xl font-serif font-black tracking-tighter bg-gradient-to-r from-white to-slate-400 lg:from-slate-900 lg:to-slate-500 bg-clip-text text-transparent drop-shadow-2xl leading-tight">
               Spare Parts Form System
             </h1>
             {loggedInAdmin && (
-              <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 border border-emerald-100 rounded-2xl animate-in fade-in slide-in-from-left-4">
-                <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                <span className="text-xs font-bold text-emerald-700">Admin: {loggedInAdmin.name}</span>
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/10 rounded-xl animate-in fade-in slide-in-from-left-4 self-start md:self-auto">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="text-[10px] font-bold text-emerald-400">Admin: {loggedInAdmin.name}</span>
               </div>
             )}
           </div>
+
+          {/* Mobile Admin Badge */}
+          {loggedInAdmin && (
+            <div className="lg:hidden flex items-center gap-1.5 px-2 py-0.5 bg-white/5 border border-white/10 rounded-lg self-start">
+              <ShieldCheck className="w-3 h-3 text-emerald-400" />
+              <span className="text-[8px] font-bold text-emerald-400">Admin: {loggedInAdmin.name}</span>
+            </div>
+          )}
         </header>
 
         <main className="flex-1 px-6 py-3 lg:px-8 lg:py-4 overflow-y-auto relative">
@@ -2179,49 +2253,6 @@ export default function App() {
           </div>
         </div>
       </div>
-
-      {/* Bottom Navigation - Mobile Only */}
-      <nav className="lg:hidden fixed bottom-6 left-6 right-6 h-16 bg-white/90 backdrop-blur-xl border border-brand-border rounded-2xl flex items-center justify-around px-4 z-40 shadow-xl">
-        <button 
-          onClick={() => setView('home')} 
-          className={cn(
-            "flex flex-col items-center gap-1 transition-all duration-300 px-4 py-1.5 rounded-xl",
-            view === 'home' ? "text-black bg-slate-100" : "text-slate-400"
-          )}
-        >
-          <LayoutDashboard className="w-5 h-5" />
-          <span className="text-[9px] font-bold uppercase tracking-widest">Home</span>
-        </button>
-        
-        <button 
-          onClick={() => setView('team-select')} 
-          className="w-14 h-14 bg-white border border-brand-border text-slate-900 rounded-2xl flex items-center justify-center -mt-10 shadow-lg shadow-black/5 active:scale-95 transition-all hover:scale-105"
-        >
-          <Scan className="w-7 h-7" />
-        </button>
-        
-        <button 
-          onClick={() => setView('history')} 
-          className={cn(
-            "flex flex-col items-center gap-1 transition-all duration-300 px-4 py-1.5 rounded-xl",
-            view === 'history' ? "text-black bg-slate-100" : "text-slate-400"
-          )}
-        >
-          <History className="w-5 h-5" />
-          <span className="text-[9px] font-bold uppercase tracking-widest">Logs</span>
-        </button>
-
-        <button 
-          onClick={() => loggedInAdmin ? setLoggedInAdmin(null) : setShowPasswordPrompt({ title: 'Admin Login', action: () => {} })}
-          className={cn(
-            "flex flex-col items-center gap-1 transition-all duration-300 px-4 py-1.5 rounded-xl",
-            loggedInAdmin ? "text-indigo-600" : "text-slate-400"
-          )}
-        >
-          {loggedInAdmin ? <LogOut className="w-5 h-5" /> : <UserIcon className="w-5 h-5" />}
-          <span className="text-[9px] font-bold uppercase tracking-widest">{loggedInAdmin ? 'Logout' : 'Login'}</span>
-        </button>
-      </nav>
     </div>
   </div>
 );
