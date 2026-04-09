@@ -1553,8 +1553,8 @@ export default function App() {
                                         </p>
                                       </div>
                                       {tx.notes && (
-                                        <div className="px-2 py-1 bg-amber-50/50 rounded-lg border border-amber-100/50 max-w-[100px]">
-                                          <p className="text-[9px] text-amber-700 italic truncate" title={tx.notes}>{tx.notes}</p>
+                                        <div className="px-2 py-1 bg-amber-50/50 rounded-lg border border-amber-100/50 ml-2">
+                                          <p className="text-[9px] text-amber-700 italic leading-tight" title={tx.notes}>{tx.notes}</p>
                                         </div>
                                       )}
                                     </div>
